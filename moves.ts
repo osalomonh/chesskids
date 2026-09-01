@@ -47,3 +47,28 @@ export function knightMoves (from: Square, board: Board): Square[] {
 
   return results;
 }
+
+export function rookMoves (from: Square, board: Board): Square[] {
+  const directions = [ [0,1], [1,0], [0,-1], [-1,0] ];
+
+  const results: Square[] = [];
+
+  for (const direction of directions) {
+    let file = from.file + direction[0];
+    let rank = from.rank + direction[1];
+
+    while (file >= 0 && file < board.size && rank >= 0 && rank < board.size) {
+      // Check if the square is occupied
+      if (board.occupied.some(sq => sq.file === file && sq.rank === rank)) {
+        break; // Stop if the square is occupied
+      }
+      results.push({ file, rank});
+      file += direction[0];
+      rank += direction[1];
+    } 
+  }
+  return results;
+}
+
+
+
