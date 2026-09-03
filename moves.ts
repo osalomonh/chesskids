@@ -8,11 +8,13 @@ export type Piece = { square: Square; color: Color; type: PieceType };
 export type Board = { size: number; pieces: Piece[] };
 
 //constants
-const KING_OFFSETS = [[0,1], [1,0], [0,-1], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]];
-const KNIGHT_OFFSETS = [[2,1], [2,-1], [-2,1], [-2,-1], [1,2], [1,-2], [-1,2], [-1,-2]];
-const ROOK_DIRECTIONS = [[0,1], [1,0], [0,-1], [-1,0]];
-const BISHOP_DIRECTIONS = [[1,1], [1,-1], [-1,1], [-1,-1]];
-const QUEEN_DIRECTIONS = [...ROOK_DIRECTIONS, ...BISHOP_DIRECTIONS];
+type Offset = readonly [number, number];
+
+const KING_OFFSETS: readonly Offset[] = [[0,1], [1,0], [0,-1], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]];
+const KNIGHT_OFFSETS: readonly Offset[] = [[2,1], [2,-1], [-2,1], [-2,-1], [1,2], [1,-2], [-1,2], [-1,-2]];
+const ROOK_DIRECTIONS: readonly Offset[] = [[0,1], [1,0], [0,-1], [-1,0]];
+const BISHOP_DIRECTIONS: readonly Offset[] = [[1,1], [1,-1], [-1,1], [-1,-1]];
+const QUEEN_DIRECTIONS: readonly Offset[] = [...ROOK_DIRECTIONS, ...BISHOP_DIRECTIONS];
 
 //helpers
 const pieceAt = (board: Board, file: number, rank: number): Piece | undefined =>
@@ -29,7 +31,7 @@ const moverColor = (board: Board, from: Square): Color | undefined =>
   pieceAt(board, from.file, from.rank)?.color;
 
 //functions
-function jumpMoves(from: Square, offsets: number[][], board: Board, moverColor: Color | undefined): Square[] {
+function jumpMoves(from: Square, offsets: readonly Offset[], board: Board, moverColor: Color | undefined): Square[] {
   const results: Square[] = [];
 
   for (const offset of offsets) {
@@ -54,7 +56,7 @@ function jumpMoves(from: Square, offsets: number[][], board: Board, moverColor: 
 
   return results;
 }
-function slideMoves(from: Square, directions: number[][], board: Board, moverColor: Color | undefined): Square[] {
+function slideMoves(from: Square, directions: readonly Offset[], board: Board, moverColor: Color | undefined): Square[] {
   const results: Square[] = [];
 
   for (const direction of directions) {

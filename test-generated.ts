@@ -1,8 +1,8 @@
 import {
   kingMoves, knightMoves, rookMoves,
   bishopMoves, queenMoves, pawnMoves,
-  Square, Board,
-} from "./moves";
+} from "./moves.js";
+import type { Square, Board } from "./moves.js";
 
 let passed = 0;
 let failed = 0;
