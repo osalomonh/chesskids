@@ -235,8 +235,10 @@ None of that is evidence the page looks right. Nobody has seen it yet, and the
 agent was explicitly told not to claim otherwise.
 
 **The gotchas worth keeping.**
-- `package.json` is `"type": "commonjs"`, so a bare `tsc` emits CommonJS and a
-  browser `import` fails. The compile has to say `--module es2020`.
+- `package.json` was `"type": "commonjs"`, so a bare `tsc` emitted CommonJS and
+  a browser `import` failed. The compile has to say `--module es2020`. Later
+  the same day this became `npm run build`, after the raw command broke twice
+  — see the entry below.
 - ES modules do not load over `file://`. The page needs a server —
   `python -m http.server 8000` — or it silently does nothing.
 - `moves.js` is now gitignored. It is build output that goes stale the moment
@@ -254,3 +256,75 @@ will surface the first time tier 1 is rendered on the board it claims to use.
 highlighting was asked for. Gaps 2, 3, and 4 in `board-state.md` remain open,
 and gap 2 is now sharper — `pawnMoves` still takes a `color` argument that is
 redundant twice over, since the piece carries both colour and type.
+
+## 3 Sep 2026 — a tsconfig, and the commands become scripts
+
+`tsconfig.json` added, with `@types/node` and npm scripts. Three consequences,
+two of them unwanted.
+
+**`noUncheckedIndexedAccess` made `moves.ts` fail typechecking.** Six
+`TS2532: Object is possibly 'undefined'` errors on `offset[0]`, `offset[1]`,
+`direction[0]`, `direction[1]`. The flag is not part of `strict`, which is why
+the file was clean before and red after. Confirmed the cause by re-running with
+`--noUncheckedIndexedAccess false`: zero errors. The code was never wrong —
+every entry is a literal pair — TypeScript just could not see that through
+`number[][]`.
+
+Fixed with a tuple type rather than assertions:
+
+```ts
+type Offset = readonly [number, number];
+```
+
+Five constants and two helper parameters annotated `readonly Offset[]`.
+Indexing a fixed-length tuple at a literal index is safe under the flag, so no
+`!`, no `as`, no `?? 0`. The agent was told explicitly that reaching for an
+assertion meant stopping and reporting instead. It didn't need to.
+
+`Offset` is deliberately not exported. `contracts/board-state.md` describes the
+module's exported surface, and adding to it would be a contract change.
+
+**The documented build command broke, silently.** Adding `tsconfig.json` made
+this fail:
+
+```
+$ npx tsc moves.ts --module es2020 --target es2020
+error TS5112: tsconfig.json is present but will not be loaded if files are
+specified on commandline.
+```
+
+That command was written in four committed places. Worse, the first check of
+it here reported the emitted JavaScript as byte-identical — which was wrong.
+The compile had exited 1 and written nothing, so of course the old file still
+hashed the same. A build that fails and leaves a stale artifact behind looks
+exactly like a build that succeeded and changed nothing.
+
+Third time this project has been bitten by the same shape: an unsaved file, a
+staged-not-committed tree, and now a failed build behind an unchanged
+artifact. In all three the tool was reporting accurately and the check was
+asking the wrong question. Hash the output *and* check the exit code.
+
+**So the commands became scripts.**
+
+```
+npm run build   tsc moves.ts --module es2020 --target es2020 --ignoreConfig
+npm run check   tsc --noEmit
+npm test        all three suites
+```
+
+Four documents now say `npm run build` instead of naming flags. The point is
+not brevity: a command written in four places drifts, and three of those four
+copies were already wrong.
+
+**`npm test` was a false gate and is now wider.** It ran only `moves.test.ts`
+— three assertions — while the 25 in `test.ts` and 29 in `test-generated.ts`
+sat outside it. All three are now chained.
+
+But two of the three still cannot fail. `test.ts` and `test-generated.ts` count
+passes and print a summary; neither sets a non-zero exit code, so a failing
+assertion in either is invisible to `&&` and to CI. Only `moves.test.ts`, which
+uses `node:test`, actually fails the gate. This is a known hole, not a fixed
+one.
+
+**`hello.ts` deleted.** Intentional — the toolchain-proving file had served its
+purpose and `tsconfig.json` was sweeping it into the compilation.

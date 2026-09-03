@@ -36,7 +36,7 @@ an orientation in the position.
 ## Constraints
 
 - Plain HTML, CSS, and JavaScript modules. No framework, no build tooling
-  beyond `tsc`, no npm packages.
+  beyond `npm run build`, no npm packages.
 - No `localStorage`, `sessionStorage`, or any browser storage.
 - Touch targets are at least 60 pixels. This is used by six-year-olds on a
   parent's phone.
@@ -46,8 +46,14 @@ an orientation in the position.
 ## Verification
 
 You cannot see the screen, and there is no test harness for this layer yet.
-So: run `npx tsc --noEmit` and report the result, and describe precisely
-what a person should see when they open the page, so the human can check it.
+So: run `npm run check`, report the result, and describe precisely what a
+person should see when they open the page, so the human can check it.
+
+If your change needs the compiled `moves.js`, run `npm run build` and check
+its exit code. A failed build leaves the previous `moves.js` in place, so an
+unchanged file is not evidence the build succeeded.
+
+Run `npm test` if you touched anything the suites cover.
 
 Do not claim anything renders correctly. You have no way to know that. State
 what you built and what to look for.

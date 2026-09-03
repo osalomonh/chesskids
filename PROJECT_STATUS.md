@@ -89,8 +89,8 @@ Each layer only knows about the one below it. We build bottom-up.
 - Selection and highlight are screen state and never touch the `Board` object
 - Currently a 5×5 board with one white knight. Highlighting only — clicking a
   destination does not move the piece yet
-- Build: `npx tsc moves.ts --module es2020 --target es2020`. Serve:
-  `python -m http.server 8000`. ES modules will not load over `file://`
+- Build: `npm run build`. Serve: `python -m http.server 8000`. ES modules will
+  not load over `file://`
 
 ---
 
@@ -217,9 +217,9 @@ model. See what rots and how you'd catch it. This is "maintenance."
 ## Commands
 
 ```
-npx tsx test.ts             run the reference suite
-npx tsx test-generated.ts   run the agent-written suite
-npx tsc --noEmit            type-check without producing output
+npm run check               type-check without producing output
+npm test                    all three suites
+npm run build               compile moves.ts to moves.js as ESM
 npm install -D <pkg>     add a dev dependency
 git status               what state am I in
 git log --oneline        what have I committed

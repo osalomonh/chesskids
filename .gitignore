@@ -1,5 +1,5 @@
 node_modules/
 
 # Compiled output. Rebuild with:
-#   npx tsc moves.ts --module es2020 --target es2020
+#   npm run build
 moves.js

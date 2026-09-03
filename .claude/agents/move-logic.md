@@ -47,11 +47,17 @@ en passant, move history, promotion, rendering.
 
 ## Verification
 
-Run `npx tsx test.ts` after every change. All tests must pass before you
+Run `npm run check` and `npm test` after every change. `npm run check` must
+exit 0 with no output, and every suite `npm test` runs must pass, before you
 report done. If a change legitimately alters expected behaviour, update the
 tests and state which expectations changed and why.
 
-Never report success without having run the tests.
+`npm test` chains three suites, but only `moves.test.ts` sets a non-zero exit
+code. `test.ts` and `test-generated.ts` print a pass/fail summary and exit 0
+either way, so a green `npm test` is not proof they passed. Read their
+summary lines and report the actual counts, never just the exit status.
+
+Never report success without having run both commands.
 
 
 ## When uncertain
