@@ -115,3 +115,40 @@ export function queenMoves (from: Square, board: Board): Square[] {
   return results;
 }
 
+export function pawnMoves(
+  from: Square,
+  board: Board,
+  color: "white" | "black"
+): Square[] {
+  const direction = color === "white" ? 1 : -1;
+  const startRank = color === "white" ? 1 : board.size - 2;
+  const results: Square[] = [];
+
+  const isOccupied = (file: number, rank: number) =>
+    board.occupied.some(sq => sq.file === file && sq.rank === rank);
+
+  const onBoard = (file: number, rank: number) =>
+    file >= 0 && file < board.size && rank >= 0 && rank < board.size;
+
+  const oneAhead = from.rank + direction;
+
+  if (onBoard(from.file, oneAhead) && !isOccupied(from.file, oneAhead)) {
+    results.push({ file: from.file, rank: oneAhead });
+
+    const twoAhead = from.rank + direction * 2;
+
+    if (from.rank === startRank && !isOccupied(from.file, twoAhead)) {
+      results.push({ file: from.file, rank: twoAhead });
+    }
+  }
+
+  for (const sideStep of [-1, 1]) {
+    const captureFile = from.file + sideStep;
+
+    if (onBoard(captureFile, oneAhead) && isOccupied(captureFile, oneAhead)) {
+      results.push({ file: captureFile, rank: oneAhead });
+    }
+  }
+
+  return results;
+}
