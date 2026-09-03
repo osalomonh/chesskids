@@ -21,11 +21,11 @@ Phase 0 (hand-building) and Phase 1 (one narrow agent) are done. The rule for
 this phase: a second agent owns rendering, the move-logic agent owns rules, and
 neither reads the other's files. The contract between them is the artifact.
 
-The contract layer now exists at `contracts/` — curriculum, its schema, the
-database shape, and an ownership readme. Content is validated, the packaging
-defects are fixed, and the path matches `CLAUDE.md`. Two things remain before a
-second agent: none of it is committed yet, and the board-state interface Phase 2
-is actually about still isn't written. See `BUILD_LOG.md`, 3 Sep.
+The contract layer exists at `contracts/`, including `board-state.md` — the
+interface between move generation and rendering. Two agents now work across it:
+move-logic owns `moves.ts`, board-render owns `board.html`, and neither reads
+the other's files. The boundary has already stopped one task and forced a
+deliberate contract change rather than a workaround. See `BUILD_LOG.md`, 3 Sep.
 
 ---
 
@@ -39,8 +39,8 @@ Each layer only knows about the one below it. We build bottom-up.
 | Accounts and saved progress | not started |
 | Curriculum | written — 7 tiers, 32 units, conforms to its schema |
 | Activities | not started |
-| **Board rendering** | **not started ← you are here** |
-| Chess logic | move generation complete, with colour and captures |
+| **Board rendering** | **`board.html` draws a board and highlights moves ← you are here** |
+| Chess logic | move generation complete, with colour, captures, and piece type |
 
 ---
 
@@ -70,36 +70,45 @@ Each layer only knows about the one below it. We build bottom-up.
 
 ---
 
-**Contracts** (`/contracts`) — written, reviewed, validated. Not yet committed.
+**Contracts** (`/contracts`) — written, reviewed, validated.
 - `curriculum.schema.json` — the format a lesson unit must follow. Defines
   `unit`, `mastery`, and six activity types
 - `curriculum.json` — the 6–9 ladder. 7 tiers, 32 units (10 / 6 / 4 / 4 / 4 /
   2 / 2). Every unit has all required fields, ids are unique, tier refs resolve
 - `schema.sql` — Postgres shape with row-level security, COPPA-minimal child
   records, and a filtered Lichess puzzle corpus
-- `README.md` — ownership rules. Five contracts named, four written
+- `readme.md` — ownership rules. Five contracts named, four written
+- `board-state.md` — the move-generation ↔ rendering interface. Types,
+  coordinates, what the six functions promise, and four known gaps (one now
+  resolved)
+
+**Board rendering** (`board.html`)
+- Self-contained page, no framework and no npm packages. Draws a board from a
+  `Board` object, sized from `board.size`
+- Click a piece to highlight its legal destinations; click again to deselect
+- Selection and highlight are screen state and never touch the `Board` object
+- Currently a 5×5 board with one white knight. Highlighting only — clicking a
+  destination does not move the piece yet
+- Build: `npx tsc moves.ts --module es2020 --target es2020`. Serve:
+  `python -m http.server 8000`. ES modules will not load over `file://`
 
 ---
 
-## Needs fixing before the second agent
+## Open
 
-The path typo, the file-content swap, the missing extensions, and the location
-question are all resolved. Contracts sit at `contracts/`, matching `CLAUDE.md`.
-Content re-validated clean after each move. One thing left:
-
-1. **Nothing is committed, and the index is stale.** `HEAD` is still `7a2de93`.
-   The old `.calude/contracts/*` paths are still staged as additions but no
-   longer exist on disk, and the real `contracts/` is untracked — so a plain
-   `git commit` would record four files at a typo'd path and omit every actual
-   contract. `git add -A` reconciles both sides; because those paths were never
-   committed, they leave the index rather than entering history.
-
-**Still unwritten, and it's the one Phase 2 needs:** the board-state contract
-between move generation and rendering. `Board` and `Piece` are de facto
-interfaces that exist only inside `moves.ts`.
-
-`tokens.json` and `bots.json` are named as contracts in the README's ownership
-table but do not exist yet.
+1. **Gaps 2, 3, and 4 in `board-state.md`.** Gap 2 is now sharper: `pawnMoves`
+   still takes a `color` argument that is redundant twice over, since `Piece`
+   carries both colour and type. Gap 3 — a move function called on an empty
+   square returns moves for a piece that isn't there — is sidestepped by the
+   renderer, not resolved.
+2. **`t1-u01-light-and-dark` teaches that the bottom-right square is always
+   light.** True on 8×8, false on the 5×5 boards `board-state.md` says tier 1
+   uses. The unit's own FEN is 8×8, so nothing is broken today. It will surface
+   the first time tier 1 renders on the board it claims to use.
+3. **Clicking a highlighted square does not move the piece.** Highlighting was
+   the whole ask; moving is the next task.
+4. **`tokens.json` and `bots.json`** are named as contracts in the readme's
+   ownership table but do not exist yet.
 
 ---
 
@@ -148,16 +157,20 @@ Move-generation agent and a board-rendering agent. Let them disagree about the
 interface. The contract only makes sense once you've felt the failure it
 prevents.
 
-1. **Commit the contracts.** `git add -A`, then commit. Until then the boundary
-   exists on disk but not in history.
-2. **Write the board-state contract.** The four files cover curriculum and
-   storage; none covers the interface Phase 2 is actually about. `Board` and
-   `Piece` are the de facto contract and live only in `moves.ts`.
-3. **Second agent definition** — board rendering. No access to `moves.ts`.
-   Consumes the contract, never the implementation.
-4. **Let them disagree on purpose.** Change one side of the interface and see
-   which agent notices. That failure is the point of the phase.
-5. **Carry over the skipped Phase 1 item** — the deliberately vague spec.
+Done:
+- **`contracts/board-state.md`** — types, coordinates, orientation rules, what
+  the six move functions promise, and an honest list of known gaps.
+- **`.claude/agents/board-render.md`** — the second agent. No access to
+  `moves.ts`; consumes the contract, never the implementation.
+- **The contract stopped a task before either agent ran.** Known Gap 1 said
+  `Piece` had no type and that rendering could not begin until it did. The fix
+  went contract first, then `moves.ts`, then the renderer.
+
+Remaining:
+1. **Let them disagree on purpose.** Change one side of the interface and see
+   which agent notices. So far the contract caught the problem *before* a run;
+   the harder test is whether it catches one mid-flight.
+2. **Carry over the skipped Phase 1 item** — the deliberately vague spec.
 
 **Phase 2 is done when** a contract change breaks the right agent, loudly, and
 you saw it coming.

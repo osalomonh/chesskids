@@ -178,3 +178,79 @@ each move invalidated the docs describing them.
 generation and rendering. `Board` and `Piece` remain de facto interfaces living
 in `moves.ts`. That is the one contract Phase 2 actually needs, and none of the
 four files address it.
+
+## 3 Sep 2026 — Phase 2, the contract stops something
+
+`contracts/board-state.md` written, then immediately earned its keep.
+
+**The boundary held before either agent ran.** The task was: board-render
+builds `board.html`, drawing a 5×5 board with one white knight and highlighting
+its legal destinations on click. The contract's own Known Gap 1 said `Piece`
+has no type, that a renderer therefore cannot know what to draw or which move
+function to call, and that this "is the first thing that must be resolved
+before rendering." Written twenty minutes before the task that needed it.
+
+So the task was blocked on a decision only the project lead could make, and the
+gap was found by reading the contract rather than by an agent failing halfway
+through. That is the whole argument for writing the thing down.
+
+**Resolution.** `Piece` gains a required `type`:
+
+```ts
+type PieceType = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
+type Piece     = { square: Square; color: Color; type: PieceType };
+```
+
+Contract updated first, then `moves.ts`, then the renderer. That order matters:
+the contract is the thing both sides read, so it cannot be the thing that
+lags. Gap 1 is marked resolved in place rather than deleted — the reasoning is
+worth more than the tidiness.
+
+**Dispatch stays in the consumer.** `moves.ts` still exports six functions and
+does not choose between them. The renderer writes the `switch` from `type` to
+function. Noted in the contract: if a second consumer writes the same switch,
+that is the signal to add a dispatcher — and that would be another contract
+change, not a convenience someone slips in.
+
+**Two agent runs, both clean.**
+
+*move-logic* added the type and migrated roughly twenty piece fixtures across
+both suites, typing each mover to match the function under test and defaulting
+blockers to `"pawn"`. The `moves.ts` diff is two lines. Verified independently:
+25/25, 29/29, `tsc --strict` clean, and the diff confirmed to touch no function
+body.
+
+*board-render* built `board.html` without needing anything the contract didn't
+give it. It kept selection and highlight state out of the `Board` object, called
+a move function only for squares confirmed to hold a piece, and special-cased
+the pawn's third argument. No parallel piece list, no chess rules in the
+renderer.
+
+**Verified, and what that word covers.** The knight's eight destinations were
+computed from the *compiled* `moves.js`, not the TypeScript —
+`(0,1) (0,3) (1,0) (1,4) (3,0) (3,4) (4,1) (4,3)` — and `board` came back
+unmutated. Both files were served over HTTP and checked for status and MIME
+type, because a wrong content type makes a browser refuse a module in silence.
+None of that is evidence the page looks right. Nobody has seen it yet, and the
+agent was explicitly told not to claim otherwise.
+
+**The gotchas worth keeping.**
+- `package.json` is `"type": "commonjs"`, so a bare `tsc` emits CommonJS and a
+  browser `import` fails. The compile has to say `--module es2020`.
+- ES modules do not load over `file://`. The page needs a server —
+  `python -m http.server 8000` — or it silently does nothing.
+- `moves.js` is now gitignored. It is build output that goes stale the moment
+  `moves.ts` changes, and a stale compiled copy in history is a debugging trap.
+
+**Found on the way past: the 5×5 board's bottom-right square is dark.** The
+colouring is correct for 8×8, where h1 is light, and an odd-sized board simply
+cannot match that convention at both corners. But curriculum unit
+`t1-u01-light-and-dark` teaches "the bottom right corner is always light", and
+`board-state.md` says tier 1 uses 5×5 boards. The unit's own FEN is 8×8, so
+nothing is broken today — but the lesson and the board size disagree, and that
+will surface the first time tier 1 is rendered on the board it claims to use.
+
+**Open.** Clicking a highlighted square does not move the piece; only
+highlighting was asked for. Gaps 2, 3, and 4 in `board-state.md` remain open,
+and gap 2 is now sharper — `pawnMoves` still takes a `color` argument that is
+redundant twice over, since the piece carries both colour and type.
