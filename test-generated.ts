@@ -210,6 +210,4 @@ console.log("\npawn");
 }
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
-
-console.log(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exitCode = 1;
