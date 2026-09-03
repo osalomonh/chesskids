@@ -1,5 +1,16 @@
+//Logic definisng the moves of chess pieces on a board 
+
+
+//Types
 export type Square = { file: number; rank: number };
 export type Board = { size: number; occupied: Square[] };
+
+//Contants
+const isOccupied = (board: Board, file: number, rank: number) =>
+  board.occupied.some(sq => sq.file === file && sq.rank === rank);
+
+const onBoard = (board: Board, file: number, rank: number) =>
+  file >= 0 && file < board.size && rank >= 0 && rank < board.size;
 
 
 export function kingMoves (from: Square, board: Board): Square[] {
@@ -123,12 +134,6 @@ export function pawnMoves(
   const direction = color === "white" ? 1 : -1;
   const startRank = color === "white" ? 1 : board.size - 2;
   const results: Square[] = [];
-
-  const isOccupied = (file: number, rank: number) =>
-    board.occupied.some(sq => sq.file === file && sq.rank === rank);
-
-  const onBoard = (file: number, rank: number) =>
-    file >= 0 && file < board.size && rank >= 0 && rank < board.size;
 
   const oneAhead = from.rank + direction;
 
