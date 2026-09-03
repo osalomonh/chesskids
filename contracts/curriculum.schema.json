@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/contracts/curriculum.schema.json",
+  "title": "Curriculum",
+  "description": "The single source of truth for what the app teaches and in what order. Only the pedagogy agent and the project lead may modify this file. All other agents consume it read-only.",
+  "type": "object",
+  "required": ["version", "ageBand", "tiers", "units"],
+  "properties": {
+    "version": { "type": "string" },
+    "ageBand": {
+      "type": "object",
+      "required": ["min", "max"],
+      "properties": {
+        "min": { "type": "integer", "minimum": 3 },
+        "max": { "type": "integer", "maximum": 14 }
+      }
+    },
+    "tiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "order", "title", "goal"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^t[0-9]+$" },
+          "order": { "type": "integer" },
+          "title": { "type": "string" },
+          "goal": {
+            "type": "string",
+            "description": "One sentence a parent would understand. If you cannot write it without jargon, the tier is wrong."
+          },
+          "unlocksAt": {
+            "type": "object",
+            "description": "Mastery required in the previous tier before this one opens.",
+            "properties": {
+              "previousTierUnitsMastered": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        }
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/unit" }
+    }
+  },
+  "$defs": {
+    "unit": {
+      "type": "object",
+      "required": ["id", "tier", "order", "title", "concept", "estimatedMinutes", "activities", "mastery"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^t[0-9]+-u[0-9]{2}-[a-z0-9-]+$",
+          "description": "Stable forever. Progress rows reference this. Never renumber a shipped unit."
+        },
+        "tier": { "type": "string" },
+        "order": { "type": "integer" },
+        "title": {
+          "type": "string",
+          "description": "Written for the child, not the parent. Sentence case. Under 40 characters."
+        },
+        "concept": {
+          "type": "string",
+          "description": "The one idea this unit teaches. One idea per unit. If it needs 'and', split the unit."
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Unit ids that must be mastered first."
+        },
+        "estimatedMinutes": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 8,
+          "description": "Hard ceiling of 8. A 6-year-old's focused session is 10-15 minutes total."
+        },
+        "readingLevel": {
+          "type": "string",
+          "enum": ["none", "emerging", "fluent"],
+          "description": "'none' means the unit must be fully playable with audio and icons only. Every tier-1 unit is 'none'."
+        },
+        "activities": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/activity" }
+        },
+        "mastery": { "$ref": "#/$defs/mastery" },
+        "voiceover": {
+          "type": "object",
+          "description": "Scripts owned by the content agent. Every string here must be recorded before the unit ships.",
+          "properties": {
+            "intro": { "type": "string" },
+            "success": { "type": "string" },
+            "hintTier1": { "type": "string" },
+            "hintTier2": { "type": "string" },
+            "retry": { "type": "string" }
+          }
+        }
+      }
+    },
+    "activity": {
+      "type": "object",
+      "required": ["type"],
+      "oneOf": [
+        { "$ref": "#/$defs/guidedDemo" },
+        { "$ref": "#/$defs/targetPractice" },
+        { "$ref": "#/$defs/puzzleSet" },
+        { "$ref": "#/$defs/miniGame" },
+        { "$ref": "#/$defs/botGame" },
+        { "$ref": "#/$defs/quiz" }
+      ]
+    },
+    "guidedDemo": {
+      "type": "object",
+      "description": "Scripted board animation with narration. The child watches, then taps to continue. No failure state.",
+      "required": ["type", "fen", "script"],
+      "properties": {
+        "type": { "const": "guided_demo" },
+        "fen": { "type": "string" },
+        "script": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["say"],
+            "properties": {
+              "say": { "type": "string" },
+              "move": { "type": "string", "description": "UCI, e.g. e2e4" },
+              "highlight": { "type": "array", "items": { "type": "string" } },
+              "waitForTap": { "type": "boolean", "default": true }
+            }
+          }
+        }
+      }
+    },
+    "targetPractice": {
+      "type": "object",
+      "description": "One piece, one or more targets, reach them in N moves. The tier-1 workhorse.",
+      "required": ["type", "boardSize", "piece", "generator"],
+      "properties": {
+        "type": { "const": "target_practice" },
+        "boardSize": { "type": "integer", "enum": [4, 5, 6, 8] },
+        "piece": { "type": "string", "enum": ["K", "Q", "R", "B", "N", "P"] },
+        "obstacles": {
+          "type": "string",
+          "enum": ["none", "blockers", "enemies"],
+          "description": "'enemies' means the target squares are defended and stepping there loses the round."
+        },
+        "generator": {
+          "type": "object",
+          "required": ["minMoves", "maxMoves", "rounds"],
+          "properties": {
+            "minMoves": { "type": "integer" },
+            "maxMoves": { "type": "integer" },
+            "rounds": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "puzzleSet": {
+      "type": "object",
+      "description": "Drawn from the imported Lichess CC0 puzzle corpus at runtime. Never hand-authored.",
+      "required": ["type", "themes", "ratingBand", "count"],
+      "properties": {
+        "type": { "const": "puzzle_set" },
+        "themes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Lichess theme tags, e.g. fork, pin, backRankMate, mateIn1."
+        },
+        "ratingBand": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "integer" },
+          "description": "[min, max]. Tier 4 starts around [400, 800]. Anything above 1200 is out of range for this age band."
+        },
+        "maxPly": {
+          "type": "integer",
+          "description": "Reject puzzles longer than this. 6-year-olds need 2-ply solutions."
+        },
+        "count": { "type": "integer" },
+        "adaptive": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, band shifts with the child's puzzle rating."
+        }
+      }
+    },
+    "miniGame": {
+      "type": "object",
+      "description": "A constrained game with a subset of pieces. Teaches a concept in isolation.",
+      "required": ["type", "fen", "winCondition"],
+      "properties": {
+        "type": { "const": "mini_game" },
+        "fen": { "type": "string" },
+        "winCondition": {
+          "type": "string",
+          "enum": ["promote", "capture_all", "checkmate", "reach_square", "survive_n_moves"]
+        },
+        "opponent": { "type": "string", "description": "Bot id from bots.json." }
+      }
+    },
+    "botGame": {
+      "type": "object",
+      "description": "Full game. Bots have named, consistent flaws so the child can learn to exploit them. Never use a randomly-blundering engine.",
+      "required": ["type", "botId"],
+      "properties": {
+        "type": { "const": "bot_game" },
+        "botId": { "type": "string" },
+        "colorForChild": { "type": "string", "enum": ["white", "black", "random"] },
+        "takebacksAllowed": { "type": "boolean", "default": true }
+      }
+    },
+    "quiz": {
+      "type": "object",
+      "description": "Tap the right square or pick the right answer. Used for recognition, not calculation.",
+      "required": ["type", "questions"],
+      "properties": {
+        "type": { "const": "quiz" },
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["fen", "ask", "answer"],
+            "properties": {
+              "fen": { "type": "string" },
+              "ask": { "type": "string" },
+              "answerType": { "type": "string", "enum": ["square", "piece", "choice"] },
+              "answer": { "type": "string" },
+              "choices": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "mastery": {
+      "type": "object",
+      "description": "How the unit is judged complete. Never time-based. Never punitive.",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["streak", "ratio", "completion"] },
+        "streak": { "type": "integer", "description": "N correct in a row." },
+        "ratio": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "integer" },
+          "description": "[correct, outOf], e.g. [8, 10]."
+        },
+        "hintsCountAgainst": { "type": "boolean", "default": false }
+      }
+    }
+  }
+}
