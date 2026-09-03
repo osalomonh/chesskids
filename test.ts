@@ -4,7 +4,7 @@ import {
   Square, Board,
 } from "./moves";
 
-const empty: Board = { size: 8, occupied: [] };
+const empty: Board = { size: 8, pieces: [] };
 
 let passed = 0;
 let failed = 0;
@@ -34,7 +34,10 @@ console.log("\nrook");
 check("centre", rookMoves({ file: 4, rank: 4 }, empty), 14);
 check("corner", rookMoves({ file: 0, rank: 0 }, empty), 14);
 check("blocked", rookMoves({ file: 0, rank: 0 },
-  { size: 8, occupied: [{ file: 0, rank: 3 }] }), 9);
+  { size: 8, pieces: [
+    { square: { file: 0, rank: 0 }, color: "white" },
+    { square: { file: 0, rank: 3 }, color: "white" },
+  ] }), 9);
 
 console.log("\nbishop");
 check("centre", bishopMoves({ file: 4, rank: 4 }, empty), 13);
@@ -51,16 +54,22 @@ check("white mid",     pawnMoves({ file: 4, rank: 3 }, empty, "white"), 1);
 check("black start",   pawnMoves({ file: 4, rank: 6 }, empty, "black"), 2);
 check("black mid",     pawnMoves({ file: 4, rank: 4 }, empty, "black"), 1);
 check("blocked",       pawnMoves({ file: 4, rank: 1 },
-  { size: 8, occupied: [{ file: 4, rank: 2 }] }, "white"), 0);
+  { size: 8, pieces: [
+    { square: { file: 4, rank: 1 }, color: "white" },
+    { square: { file: 4, rank: 2 }, color: "white" },
+  ] }, "white"), 0);
 check("blocked at two", pawnMoves({ file: 4, rank: 1 },
-  { size: 8, occupied: [{ file: 4, rank: 3 }] }, "white"), 1);
+  { size: 8, pieces: [
+    { square: { file: 4, rank: 1 }, color: "white" },
+    { square: { file: 4, rank: 3 }, color: "white" },
+  ] }, "white"), 1);
 check("capture",       pawnMoves({ file: 0, rank: 3 },
-  { size: 8, occupied: [{ file: 1, rank: 4 }] }, "white"), 2);
+  { size: 8, pieces: [{ square: { file: 1, rank: 4 }, color: "black" }] }, "white"), 2);
 check("no wrap",       pawnMoves({ file: 0, rank: 3 }, empty, "white"), 1);
 check("last rank",     pawnMoves({ file: 4, rank: 7 }, empty, "white"), 0);
 
 console.log("\nsmall board");
-check("5x5 king centre",  kingMoves({ file: 2, rank: 2 }, { size: 5, occupied: [] }), 8);
-check("5x5 rook centre",  rookMoves({ file: 2, rank: 2 }, { size: 5, occupied: [] }), 8);
+check("5x5 king centre",  kingMoves({ file: 2, rank: 2 }, { size: 5, pieces: [] }), 8);
+check("5x5 rook centre",  rookMoves({ file: 2, rank: 2 }, { size: 5, pieces: [] }), 8);
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
