@@ -73,3 +73,6 @@ check("5x5 king centre",  kingMoves({ file: 2, rank: 2 }, { size: 5, pieces: [] 
 check("5x5 rook centre",  rookMoves({ file: 2, rank: 2 }, { size: 5, pieces: [] }), 8);
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
+
+console.log(`\n${passed} passed, ${failed} failed\n`);
+if (failed > 0) process.exitCode = 1;

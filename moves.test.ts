@@ -10,7 +10,7 @@ const sorted = (squares: Square[]) =>
 test("knight in the corner reaches exactly b3 and c2", () => {
   assert.deepStrictEqual(
     sorted(knightMoves({ file: 0, rank: 0 }, empty)),
-    sorted([{ file: 1, rank: 2 }, { file: 2, rank: 1 }])
+    sorted([{ file: 1, rank: 2 }, { file: 2, rank: 1}])
   );
 });
 
