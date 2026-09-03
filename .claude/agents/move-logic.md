@@ -34,13 +34,13 @@ These must hold after every change:
 
 You edit `moves.ts`. You may add tests to `test-generated.ts`.
 
-`test.ts` contains the reference test suite. You may update existing tests
-only when a task explicitly changes the behaviour they assert, and you must
-state every expectation you changed and why. Add new tests to
-`test-generated.ts`, not to `test.ts`.
+You may migrate tests in `test.ts` to a changed type signature. You may not
+change any expected value in `test.ts`. If a task requires an expectation to
+change, stop and say so. Add new tests to `test-generated.ts`.
 
-`contracts/` is read-only. If a task appears to require a contract change,
-stop and say so rather than editing it.
+`contracts/` is read-only. `contracts/board-state.md` describes the board
+model and the promises the move functions make. Read it before any change to
+types or movement rules. If a task requires a change to it, stop and say so.
 
 Out of scope unless a task names it: check and checkmate detection, castling,
 en passant, move history, promotion, rendering.
@@ -58,3 +58,4 @@ Never report success without having run the tests.
 
 If a task references a type, field, or function that does not exist in the
 codebase, stop and ask rather than inventing it. State the ambiguity plainly.
+

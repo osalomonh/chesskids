@@ -12,3 +12,5 @@ A chess learning web app for ages 6–9. TypeScript, no framework yet.
 - Never hardcode board size. Use `board.size`.
 - `file` = column, `rank` = row. Both 0-indexed.
 - Run `npx tsx test.ts` after any change to `moves.ts`. All tests must pass.
+- `contracts/board-state.md` — the interface between move generation and
+  rendering. Read before touching either side.

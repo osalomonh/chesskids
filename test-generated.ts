@@ -51,8 +51,8 @@ console.log("\nking");
   const friendlyBlocked: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 5, rank: 5 }, color: "white" },
+      { square: from, color: "white", type: "king" },
+      { square: { file: 5, rank: 5 }, color: "white", type: "pawn" },
     ],
   };
   const moves = kingMoves(from, friendlyBlocked);
@@ -62,8 +62,8 @@ console.log("\nking");
   const enemyCapturable: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 5, rank: 5 }, color: "black" },
+      { square: from, color: "white", type: "king" },
+      { square: { file: 5, rank: 5 }, color: "black", type: "pawn" },
     ],
   };
   const moves2 = kingMoves(from, enemyCapturable);
@@ -78,8 +78,8 @@ console.log("\nknight");
   const friendlyBlocked: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 6, rank: 5 }, color: "white" },
+      { square: from, color: "white", type: "knight" },
+      { square: { file: 6, rank: 5 }, color: "white", type: "pawn" },
     ],
   };
   const moves = knightMoves(from, friendlyBlocked);
@@ -89,8 +89,8 @@ console.log("\nknight");
   const enemyCapturable: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 6, rank: 5 }, color: "black" },
+      { square: from, color: "white", type: "knight" },
+      { square: { file: 6, rank: 5 }, color: "black", type: "pawn" },
     ],
   };
   const moves2 = knightMoves(from, enemyCapturable);
@@ -105,8 +105,8 @@ console.log("\nrook");
   const friendlyBlocked: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 0, rank: 3 }, color: "white" },
+      { square: from, color: "white", type: "rook" },
+      { square: { file: 0, rank: 3 }, color: "white", type: "pawn" },
     ],
   };
   const moves = rookMoves(from, friendlyBlocked);
@@ -117,8 +117,8 @@ console.log("\nrook");
   const enemyCapturable: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 0, rank: 3 }, color: "black" },
+      { square: from, color: "white", type: "rook" },
+      { square: { file: 0, rank: 3 }, color: "black", type: "pawn" },
     ],
   };
   const moves2 = rookMoves(from, enemyCapturable);
@@ -134,8 +134,8 @@ console.log("\nbishop");
   const friendlyBlocked: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 3, rank: 3 }, color: "white" },
+      { square: from, color: "white", type: "bishop" },
+      { square: { file: 3, rank: 3 }, color: "white", type: "pawn" },
     ],
   };
   const moves = bishopMoves(from, friendlyBlocked);
@@ -146,8 +146,8 @@ console.log("\nbishop");
   const enemyCapturable: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 3, rank: 3 }, color: "black" },
+      { square: from, color: "white", type: "bishop" },
+      { square: { file: 3, rank: 3 }, color: "black", type: "pawn" },
     ],
   };
   const moves2 = bishopMoves(from, enemyCapturable);
@@ -163,8 +163,8 @@ console.log("\nqueen");
   const friendlyBlocked: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 4, rank: 6 }, color: "white" },
+      { square: from, color: "white", type: "queen" },
+      { square: { file: 4, rank: 6 }, color: "white", type: "pawn" },
     ],
   };
   const moves = queenMoves(from, friendlyBlocked);
@@ -175,8 +175,8 @@ console.log("\nqueen");
   const enemyCapturable: Board = {
     size: 8,
     pieces: [
-      { square: from, color: "white" },
-      { square: { file: 4, rank: 6 }, color: "black" },
+      { square: from, color: "white", type: "queen" },
+      { square: { file: 4, rank: 6 }, color: "black", type: "pawn" },
     ],
   };
   const moves2 = queenMoves(from, enemyCapturable);
@@ -192,14 +192,14 @@ console.log("\npawn");
 
   const diagonalEnemy: Board = {
     size: 8,
-    pieces: [{ square: { file: 5, rank: 4 }, color: "black" }],
+    pieces: [{ square: { file: 5, rank: 4 }, color: "black", type: "pawn" }],
   };
   const movesEnemy = pawnMoves(from, diagonalEnemy, "white");
   checkIncludes("diagonal with enemy is legal", movesEnemy, { file: 5, rank: 4 });
 
   const diagonalFriendly: Board = {
     size: 8,
-    pieces: [{ square: { file: 5, rank: 4 }, color: "white" }],
+    pieces: [{ square: { file: 5, rank: 4 }, color: "white", type: "pawn" }],
   };
   const movesFriendly = pawnMoves(from, diagonalFriendly, "white");
   checkExcludes("diagonal with friendly is not legal", movesFriendly, { file: 5, rank: 4 });

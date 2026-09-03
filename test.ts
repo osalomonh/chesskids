@@ -35,8 +35,8 @@ check("centre", rookMoves({ file: 4, rank: 4 }, empty), 14);
 check("corner", rookMoves({ file: 0, rank: 0 }, empty), 14);
 check("blocked", rookMoves({ file: 0, rank: 0 },
   { size: 8, pieces: [
-    { square: { file: 0, rank: 0 }, color: "white" },
-    { square: { file: 0, rank: 3 }, color: "white" },
+    { square: { file: 0, rank: 0 }, color: "white", type: "rook" },
+    { square: { file: 0, rank: 3 }, color: "white", type: "pawn" },
   ] }), 9);
 
 console.log("\nbishop");
@@ -55,16 +55,16 @@ check("black start",   pawnMoves({ file: 4, rank: 6 }, empty, "black"), 2);
 check("black mid",     pawnMoves({ file: 4, rank: 4 }, empty, "black"), 1);
 check("blocked",       pawnMoves({ file: 4, rank: 1 },
   { size: 8, pieces: [
-    { square: { file: 4, rank: 1 }, color: "white" },
-    { square: { file: 4, rank: 2 }, color: "white" },
+    { square: { file: 4, rank: 1 }, color: "white", type: "pawn" },
+    { square: { file: 4, rank: 2 }, color: "white", type: "pawn" },
   ] }, "white"), 0);
 check("blocked at two", pawnMoves({ file: 4, rank: 1 },
   { size: 8, pieces: [
-    { square: { file: 4, rank: 1 }, color: "white" },
-    { square: { file: 4, rank: 3 }, color: "white" },
+    { square: { file: 4, rank: 1 }, color: "white", type: "pawn" },
+    { square: { file: 4, rank: 3 }, color: "white", type: "pawn" },
   ] }, "white"), 1);
 check("capture",       pawnMoves({ file: 0, rank: 3 },
-  { size: 8, pieces: [{ square: { file: 1, rank: 4 }, color: "black" }] }, "white"), 2);
+  { size: 8, pieces: [{ square: { file: 1, rank: 4 }, color: "black", type: "pawn" }] }, "white"), 2);
 check("no wrap",       pawnMoves({ file: 0, rank: 3 }, empty, "white"), 1);
 check("last rank",     pawnMoves({ file: 4, rank: 7 }, empty, "white"), 0);
 

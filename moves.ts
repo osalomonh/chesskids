@@ -3,7 +3,8 @@
 //types
 export type Square = { file: number; rank: number };
 export type Color = "white" | "black";
-export type Piece = { square: Square; color: Color };
+export type PieceType = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
+export type Piece = { square: Square; color: Color; type: PieceType };
 export type Board = { size: number; pieces: Piece[] };
 
 //constants
