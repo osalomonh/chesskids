@@ -5,7 +5,7 @@
 export type Square = { file: number; rank: number };
 export type Board = { size: number; occupied: Square[] };
 
-//Contants
+//Helpers
 const isOccupied = (board: Board, file: number, rank: number) =>
   board.occupied.some(sq => sq.file === file && sq.rank === rank);
 
@@ -137,12 +137,12 @@ export function pawnMoves(
 
   const oneAhead = from.rank + direction;
 
-  if (onBoard(from.file, oneAhead) && !isOccupied(from.file, oneAhead)) {
+  if (onBoard(board, from.file, oneAhead) && !isOccupied(board, from.file, oneAhead)) {
     results.push({ file: from.file, rank: oneAhead });
 
     const twoAhead = from.rank + direction * 2;
 
-    if (from.rank === startRank && !isOccupied(from.file, twoAhead)) {
+    if (from.rank === startRank && !isOccupied(board, from.file, twoAhead)) {
       results.push({ file: from.file, rank: twoAhead });
     }
   }
@@ -150,7 +150,7 @@ export function pawnMoves(
   for (const sideStep of [-1, 1]) {
     const captureFile = from.file + sideStep;
 
-    if (onBoard(captureFile, oneAhead) && isOccupied(captureFile, oneAhead)) {
+    if (onBoard(board, captureFile, oneAhead) && isOccupied(board, captureFile, oneAhead)) {
       results.push({ file: captureFile, rank: oneAhead });
     }
   }
