@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 // --- helpers ---
 
@@ -27,6 +28,11 @@ if (dirty) {
 
 console.log("check:", gate("npm run check") ? "PASS" : "FAIL");
 console.log("test: ", gate("npm test") ? "PASS" : "FAIL");
+
+const tsconfig = readFileSync("tsconfig.json", "utf8");
+const strictIndexing = tsconfig.includes('"noUncheckedIndexedAccess": true');
+
+console.log("types honest:", strictIndexing ? "PASS" : "FAIL — strict indexing disabled");
 
 const allowed = ["moves.ts"];
 const violations = changedFiles().filter(f => !allowed.includes(f));
