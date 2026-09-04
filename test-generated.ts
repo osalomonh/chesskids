@@ -2,7 +2,7 @@ import {
   kingMoves, knightMoves, rookMoves,
   bishopMoves, queenMoves, pawnMoves,
 } from "./moves.js";
-import type { Square, Board } from "./moves.js";
+import type { Square, Board, Piece } from "./moves.js";
 
 let passed = 0;
 let failed = 0;
@@ -189,24 +189,49 @@ console.log("\nqueen");
 console.log("\npawn");
 {
   const from: Square = { file: 4, rank: 3 };
+  const mover: Piece = { square: from, color: "white", type: "pawn" };
 
   const diagonalEnemy: Board = {
     size: 8,
-    pieces: [{ square: { file: 5, rank: 4 }, color: "black", type: "pawn" }],
+    pieces: [mover, { square: { file: 5, rank: 4 }, color: "black", type: "pawn" }],
   };
-  const movesEnemy = pawnMoves(from, diagonalEnemy, "white");
+  const movesEnemy = pawnMoves(from, diagonalEnemy);
   checkIncludes("diagonal with enemy is legal", movesEnemy, { file: 5, rank: 4 });
 
   const diagonalFriendly: Board = {
     size: 8,
-    pieces: [{ square: { file: 5, rank: 4 }, color: "white", type: "pawn" }],
+    pieces: [mover, { square: { file: 5, rank: 4 }, color: "white", type: "pawn" }],
   };
-  const movesFriendly = pawnMoves(from, diagonalFriendly, "white");
+  const movesFriendly = pawnMoves(from, diagonalFriendly);
   checkExcludes("diagonal with friendly is not legal", movesFriendly, { file: 5, rank: 4 });
 
-  const diagonalEmpty: Board = { size: 8, pieces: [] };
-  const movesEmpty = pawnMoves(from, diagonalEmpty, "white");
+  const diagonalEmpty: Board = { size: 8, pieces: [mover] };
+  const movesEmpty = pawnMoves(from, diagonalEmpty);
   checkExcludes("diagonal with nothing is not legal", movesEmpty, { file: 5, rank: 4 });
+}
+
+// ---- empty from-square (gap 3) ----
+// No piece stands at `from` in any of these boards, so every function
+// should return [] rather than generating moves for a piece that isn't
+// there.
+console.log("\nempty from-square");
+{
+  const from: Square = { file: 4, rank: 4 };
+  const somewhereElse: Board = {
+    size: 8,
+    pieces: [{ square: { file: 0, rank: 0 }, color: "white", type: "pawn" }],
+  };
+
+  check("kingMoves on empty square", kingMoves(from, somewhereElse), 0);
+  check("knightMoves on empty square", knightMoves(from, somewhereElse), 0);
+  check("rookMoves on empty square", rookMoves(from, somewhereElse), 0);
+  check("bishopMoves on empty square", bishopMoves(from, somewhereElse), 0);
+  check("queenMoves on empty square", queenMoves(from, somewhereElse), 0);
+  check("pawnMoves on empty square", pawnMoves(from, somewhereElse), 0);
+
+  const totallyEmpty: Board = { size: 8, pieces: [] };
+  check("kingMoves on totally empty board", kingMoves(from, totallyEmpty), 0);
+  check("rookMoves on totally empty board", rookMoves(from, totallyEmpty), 0);
 }
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

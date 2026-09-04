@@ -142,9 +142,7 @@
       case "rook":   return rookMoves(piece.square, board);
       case "bishop": return bishopMoves(piece.square, board);
       case "knight": return knightMoves(piece.square, board);
-      // pawnMoves has a different signature (gap 2): it needs colour
-      // explicitly, since it predates colour existing on Piece.
-      case "pawn":   return pawnMoves(piece.square, board, piece.color);
+      case "pawn":   return pawnMoves(piece.square, board);
     }
   }
 

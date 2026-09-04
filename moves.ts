@@ -25,13 +25,18 @@ const onBoard = (board: Board, file: number, rank: number) =>
   file >= 0 && file < board.size && rank >= 0 && rank < board.size;
 
 // Finds the colour of the piece standing at `from`. If no piece stands
-// there, the mover has no colour, and every occupied square is treated as
-// an enemy (capturable) below.
+// there, the mover has no colour, and there is no piece to move — callers
+// return [] in that case rather than generating moves for a phantom piece.
 const moverColor = (board: Board, from: Square): Color | undefined =>
   pieceAt(board, from.file, from.rank)?.color;
 
 //functions
 function jumpMoves(from: Square, offsets: readonly Offset[], board: Board, moverColor: Color | undefined): Square[] {
+  // No piece at `from` means no colour, and no piece to move.
+  if (moverColor === undefined) {
+    return [];
+  }
+
   const results: Square[] = [];
 
   for (const offset of offsets) {
@@ -44,8 +49,7 @@ function jumpMoves(from: Square, offsets: readonly Offset[], board: Board, mover
 
     const occupant = pieceAt(board, newFile, newRank);
 
-    // A friendly piece blocks the square; anything else (empty, or enemy
-    // when moverColor is known, or any piece when moverColor is unknown)
+    // A friendly piece blocks the square; anything else (empty, or enemy)
     // is a legal destination.
     if (occupant && occupant.color === moverColor) {
       continue;
@@ -57,6 +61,11 @@ function jumpMoves(from: Square, offsets: readonly Offset[], board: Board, mover
   return results;
 }
 function slideMoves(from: Square, directions: readonly Offset[], board: Board, moverColor: Color | undefined): Square[] {
+  // No piece at `from` means no colour, and no piece to move.
+  if (moverColor === undefined) {
+    return [];
+  }
+
   const results: Square[] = [];
 
   for (const direction of directions) {
@@ -71,8 +80,7 @@ function slideMoves(from: Square, directions: readonly Offset[], board: Board, m
         if (occupant.color === moverColor) {
           break;
         }
-        // Enemy piece (or unknown mover colour): capture square included,
-        // slide stops here.
+        // Enemy piece: capture square included, slide stops here.
         results.push({ file, rank });
         break;
       }
@@ -108,9 +116,17 @@ export function queenMoves (from: Square, board: Board): Square[] {
 
 export function pawnMoves(
   from: Square,
-  board: Board,
-  color: Color
+  board: Board
 ): Square[] {
+
+  const color = moverColor(board, from);
+
+  // No piece at `from` means no colour, and therefore no direction to
+  // move in. Unlike the jump/slide pieces, a pawn's whole move set is
+  // colour-dependent, so there is nothing sensible to return but [].
+  if (color === undefined) {
+    return [];
+  }
 
   const direction = color === "white" ? 1 : -1;
   const startRank = color === "white" ? 1 : board.size - 2;

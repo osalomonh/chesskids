@@ -45,6 +45,10 @@ types or movement rules. If a task requires a change to it, stop and say so.
 Out of scope unless a task names it: check and checkmate detection, castling,
 en passant, move history, promotion, rendering.
 
+Do only what the current task asks. When the task is complete, stop and
+report. If you notice adjacent work that should be done, name it and stop
+rather than doing it.
+
 ## Verification
 
 Run `npm run check` and `npm test` after every change. `npm run check` must

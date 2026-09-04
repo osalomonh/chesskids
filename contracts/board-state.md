@@ -79,7 +79,7 @@ knightMoves(from: Square, board: Board): Square[]
 rookMoves(from: Square, board: Board): Square[]
 bishopMoves(from: Square, board: Board): Square[]
 queenMoves(from: Square, board: Board): Square[]
-pawnMoves(from: Square, board: Board, color: Color): Square[]
+pawnMoves(from: Square, board: Board): Square[]
 ```
 
 Each returns the squares a piece at `from` may move to.
@@ -95,6 +95,9 @@ Guarantees:
   returned, and a sliding piece stops there.
 - **Pseudo-legal only.** These do not consider check. A move that would leave
   the mover's own king in check is still returned.
+- **No piece at `from` means no moves.** If `from` holds no piece, there is no
+  mover and no colour to reason about, so every function returns `[]` rather
+  than generating moves for a piece that isn't there.
 
 Consumers must not assume the returned squares are in any particular order.
 
@@ -139,22 +142,21 @@ than one consumer ends up writing the same switch, that is the signal to add
 a dispatcher to `moves.ts` — and that would be another change to this
 document.
 
-**2. `pawnMoves` has a different signature.**
+**2. ~~`pawnMoves` has a different signature.~~ Resolved 4 Sep 2026.**
 
-Five functions take `(from, board)`. The pawn takes `(from, board, color)`,
-because pawn direction depends on colour and the pawn function predates
-colour existing on `Piece`. Now that pieces carry colour, this parameter is
-redundant and inconsistent.
+All six move functions now take `(from, board)`. `pawnMoves` looks up the
+mover's colour from the board via the same `moverColor` helper the other
+five use, instead of taking it as a separate parameter.
 
-**3. Empty-square behaviour is undefined-ish.**
+**3. ~~Empty-square behaviour is undefined-ish.~~ Resolved 4 Sep 2026.**
 
-The five non-pawn functions look up the mover's colour from the board. When
-`from` holds no piece, there is no colour, and the current implementation
-treats every occupied square as capturable. So asking for `rookMoves` on an
-empty square returns moves for a piece that isn't there.
-
-Undecided whether this should return `[]` instead. Several existing tests
-rely on the current behaviour.
+All six functions look up the mover's colour from the board. When `from`
+holds no piece, there is no colour, and now no function generates moves for
+a piece that isn't there: `kingMoves`, `knightMoves`, `rookMoves`,
+`bishopMoves`, `queenMoves`, and `pawnMoves` all return `[]` for an empty
+`from` square. Previously the five non-pawn functions treated every
+occupied square as capturable in that case, so `rookMoves` on an empty
+square returned moves for a piece that wasn't there.
 
 **4. Not implemented.**
 
