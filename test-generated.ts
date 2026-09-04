@@ -1,8 +1,8 @@
 import {
   kingMoves, knightMoves, rookMoves,
-  bishopMoves, queenMoves, pawnMoves,
+  bishopMoves, queenMoves, pawnMoves, movesFrom,
 } from "./moves.js";
-import type { Square, Board, Piece } from "./moves.js";
+import type { Square, Board, Piece, Move } from "./moves.js";
 
 let passed = 0;
 let failed = 0;
@@ -232,6 +232,154 @@ console.log("\nempty from-square");
   const totallyEmpty: Board = { size: 8, pieces: [] };
   check("kingMoves on totally empty board", kingMoves(from, totallyEmpty), 0);
   check("rookMoves on totally empty board", rookMoves(from, totallyEmpty), 0);
+}
+
+// ---- movesFrom dispatch ----
+// movesFrom must produce exactly the destinations of the piece's own
+// function — it wraps them, it does not recompute them.
+console.log("\nmovesFrom dispatch");
+{
+  const sameSquares = (moves: Move[], squares: Square[]): boolean =>
+    moves.length === squares.length &&
+    squares.every(sq => moves.some(m => m.to.file === sq.file && m.to.rank === sq.rank)) &&
+    moves.every(m => squares.some(sq => m.to.file === sq.file && m.to.rank === sq.rank));
+
+  function checkDispatch(label: string, moves: Move[], squares: Square[]) {
+    if (sameSquares(moves, squares)) {
+      console.log(`  PASS  ${label}  (${squares.length} destinations match)`);
+      passed++;
+    } else {
+      console.log(`  FAIL  ${label}  destinations differ`);
+      console.log(`        movesFrom: ${JSON.stringify(moves.map(m => m.to))}`);
+      console.log(`        direct:    ${JSON.stringify(squares)}`);
+      failed++;
+    }
+  }
+
+  function checkEchoesFrom(label: string, from: Square, moves: Move[]) {
+    const allEcho = moves.every(m => m.from.file === from.file && m.from.rank === from.rank);
+    if (allEcho && moves.length > 0) {
+      console.log(`  PASS  ${label}  (${moves.length} moves echo from)`);
+      passed++;
+    } else if (moves.length === 0) {
+      console.log(`  FAIL  ${label}  no moves generated, echo untested`);
+      failed++;
+    } else {
+      console.log(`  FAIL  ${label}  some moves do not echo from`);
+      console.log(`        ${JSON.stringify(moves)}`);
+      failed++;
+    }
+  }
+
+  // One crowded board, every piece type on it, so dispatch is tested
+  // against neighbours rather than in isolation.
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: { file: 4, rank: 0 }, color: "white", type: "king" },
+      { square: { file: 3, rank: 3 }, color: "white", type: "queen" },
+      { square: { file: 0, rank: 2 }, color: "white", type: "rook" },
+      { square: { file: 2, rank: 0 }, color: "white", type: "bishop" },
+      { square: { file: 6, rank: 0 }, color: "white", type: "knight" },
+      { square: { file: 5, rank: 1 }, color: "white", type: "pawn" },
+      { square: { file: 4, rank: 2 }, color: "black", type: "pawn" },
+      { square: { file: 7, rank: 5 }, color: "black", type: "rook" },
+    ],
+  };
+
+  const kingFrom: Square = { file: 4, rank: 0 };
+  checkDispatch("dispatches king", movesFrom(kingFrom, board), kingMoves(kingFrom, board));
+  checkEchoesFrom("king moves echo from", kingFrom, movesFrom(kingFrom, board));
+
+  const queenFrom: Square = { file: 3, rank: 3 };
+  checkDispatch("dispatches queen", movesFrom(queenFrom, board), queenMoves(queenFrom, board));
+  checkEchoesFrom("queen moves echo from", queenFrom, movesFrom(queenFrom, board));
+
+  const rookFrom: Square = { file: 0, rank: 2 };
+  checkDispatch("dispatches rook", movesFrom(rookFrom, board), rookMoves(rookFrom, board));
+  checkEchoesFrom("rook moves echo from", rookFrom, movesFrom(rookFrom, board));
+
+  const bishopFrom: Square = { file: 2, rank: 0 };
+  checkDispatch("dispatches bishop", movesFrom(bishopFrom, board), bishopMoves(bishopFrom, board));
+  checkEchoesFrom("bishop moves echo from", bishopFrom, movesFrom(bishopFrom, board));
+
+  const knightFrom: Square = { file: 6, rank: 0 };
+  checkDispatch("dispatches knight", movesFrom(knightFrom, board), knightMoves(knightFrom, board));
+  checkEchoesFrom("knight moves echo from", knightFrom, movesFrom(knightFrom, board));
+
+  const whitePawnFrom: Square = { file: 5, rank: 1 };
+  checkDispatch("dispatches white pawn", movesFrom(whitePawnFrom, board), pawnMoves(whitePawnFrom, board));
+  checkEchoesFrom("white pawn moves echo from", whitePawnFrom, movesFrom(whitePawnFrom, board));
+
+  // Black pawn too: direction is read from the board, not passed in, so
+  // dispatch must not smuggle a colour assumption.
+  const blackPawnFrom: Square = { file: 4, rank: 2 };
+  checkDispatch("dispatches black pawn", movesFrom(blackPawnFrom, board), pawnMoves(blackPawnFrom, board));
+  checkEchoesFrom("black pawn moves echo from", blackPawnFrom, movesFrom(blackPawnFrom, board));
+
+  // A black non-pawn as well, so dispatch is not only exercised on white.
+  const blackRookFrom: Square = { file: 7, rank: 5 };
+  checkDispatch("dispatches black rook", movesFrom(blackRookFrom, board), rookMoves(blackRookFrom, board));
+  checkEchoesFrom("black rook moves echo from", blackRookFrom, movesFrom(blackRookFrom, board));
+}
+
+// ---- movesFrom on an empty square ----
+console.log("\nmovesFrom empty from-square");
+{
+  function checkEmpty(label: string, moves: Move[]) {
+    if (moves.length === 0) {
+      console.log(`  PASS  ${label}  (0)`);
+      passed++;
+    } else {
+      console.log(`  FAIL  ${label}  expected 0, got ${moves.length}`);
+      console.log(`        ${JSON.stringify(moves)}`);
+      failed++;
+    }
+  }
+
+  const occupiedElsewhere: Board = {
+    size: 8,
+    pieces: [
+      { square: { file: 0, rank: 0 }, color: "white", type: "rook" },
+      { square: { file: 7, rank: 7 }, color: "black", type: "king" },
+    ],
+  };
+  checkEmpty("empty square amid other pieces", movesFrom({ file: 4, rank: 4 }, occupiedElsewhere));
+
+  const totallyEmpty: Board = { size: 8, pieces: [] };
+  checkEmpty("empty square on empty board", movesFrom({ file: 4, rank: 4 }, totallyEmpty));
+}
+
+// ---- movesFrom carries no dimension assumptions ----
+// Tier 1 lessons use 5x5 boards; dispatch must read board.size like
+// everything else.
+console.log("\nmovesFrom on a 5x5 board");
+{
+  const small: Board = {
+    size: 5,
+    pieces: [{ square: { file: 2, rank: 2 }, color: "white", type: "rook" }],
+  };
+  const from: Square = { file: 2, rank: 2 };
+  const moves = movesFrom(from, small);
+
+  const direct = rookMoves(from, small);
+  if (moves.length === direct.length && moves.length === 8) {
+    console.log(`  PASS  5x5 rook matches direct call  (8)`);
+    passed++;
+  } else {
+    console.log(`  FAIL  5x5 rook expected 8, got ${moves.length} (direct ${direct.length})`);
+    failed++;
+  }
+
+  const onBoard5 = moves.every(m =>
+    m.to.file >= 0 && m.to.file < small.size && m.to.rank >= 0 && m.to.rank < small.size);
+  if (onBoard5) {
+    console.log(`  PASS  5x5 destinations all on board`);
+    passed++;
+  } else {
+    console.log(`  FAIL  5x5 destinations left the board  ${JSON.stringify(moves.map(m => m.to))}`);
+    failed++;
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

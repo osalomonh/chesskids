@@ -158,3 +158,41 @@ export function pawnMoves(
 
   return results;
 }
+//dispatch
+// A move carries both ends. `from` alone leaves the caller to track the
+// origin separately, and the two could disagree; one object cannot.
+// Nothing derivable from `from`, `to`, and the board belongs here.
+export type Move = { from: Square; to: Square };
+
+// Reads the piece at `from` and dispatches to that piece's move function,
+// wrapping each destination square as a Move. Additive: the six per-piece
+// functions are unchanged and none of their logic is reimplemented here.
+export function movesFrom(from: Square, board: Board): Move[] {
+  const piece = pieceAt(board, from.file, from.rank);
+
+  // No piece at `from` means no mover and nothing to dispatch on.
+  if (piece === undefined) {
+    return [];
+  }
+
+  const destinations = destinationsFor(piece.type, from, board);
+
+  return destinations.map(to => ({ from, to }));
+}
+
+// Exhaustive over PieceType: adding a piece type without a case here is a
+// compile error, because `never` accepts nothing.
+function destinationsFor(type: PieceType, from: Square, board: Board): Square[] {
+  switch (type) {
+    case "king":   return kingMoves(from, board);
+    case "queen":  return queenMoves(from, board);
+    case "rook":   return rookMoves(from, board);
+    case "bishop": return bishopMoves(from, board);
+    case "knight": return knightMoves(from, board);
+    case "pawn":   return pawnMoves(from, board);
+    default: {
+      const unreachable: never = type;
+      return unreachable;
+    }
+  }
+}

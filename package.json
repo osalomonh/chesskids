@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc moves.ts --module es2020 --target es2020 --ignoreConfig",
     "check": "tsc --noEmit",
-    "test": "tsx --test moves.test.ts && tsx test.ts && tsx test-generated.ts"
+    "test": "tsx --test moves.test.ts game.test.ts && tsx test.ts && tsx test-generated.ts"
   },
   "keywords": [],
   "author": "",
