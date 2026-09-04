@@ -1,7 +1,8 @@
 <!--
   Build:
     npm run build
-    (only needed once, or whenever moves.ts changes; produces moves.js as ESM)
+    (only needed once, or whenever moves.ts/game.ts change; produces
+    moves.js and game.js as ESM)
 
   Serve (ES modules do not load over file://):
     python -m http.server 8000
@@ -20,10 +21,21 @@
     height: 100%;
     margin: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     background: #2b2b2b;
     font-family: sans-serif;
+  }
+
+  /* Off the board, not on it: a turn indicator lives here, not in a square. */
+  #turn-indicator {
+    margin-bottom: 12px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 18px;
+    color: #eee;
+    background: #1a1a1a;
   }
 
   #board {
@@ -95,31 +107,44 @@
 </style>
 </head>
 <body>
+<div id="turn-indicator"></div>
 <div id="board"></div>
 
 <script type="module">
-  import {
-    kingMoves,
-    queenMoves,
-    rookMoves,
-    bishopMoves,
-    knightMoves,
-    pawnMoves
-  } from "./moves.js";
+  import { applyMove, legalMovesFrom, sideToMove } from "./game.js";
 
-  // --- Board state (from white's perspective, per contracts/board-state.md) ---
-  // 5x5 board, single white knight on a centre square so several of its
-  // eight destinations land on-board.
-  const board = {
+  // --- Starting position (from white's perspective, per contracts/board-state.md) ---
+  // 5x5 board with pieces for both colours, so turn alternation is visible:
+  // a knight and a king for each side, mirrored across the board.
+  const startingBoard = {
     size: 5,
     pieces: [
-      { square: { file: 2, rank: 2 }, color: "white", type: "knight" }
+      { square: { file: 0, rank: 0 }, color: "white", type: "king" },
+      { square: { file: 2, rank: 1 }, color: "white", type: "knight" },
+      { square: { file: 4, rank: 4 }, color: "black", type: "king" },
+      { square: { file: 2, rank: 3 }, color: "black", type: "knight" }
     ]
   };
 
-  // --- Screen state (selection/highlight). Never written into `board`. ---
+  // --- GameState: the page's single source of truth. Per contracts/game-state.md
+  // §13, castling rights are all false and enPassantTarget is null on a small
+  // board — that is correct, not a placeholder.
+  let state = {
+    board: startingBoard,
+    sideToMove: "white",
+    castling: {
+      whiteKingside: false,
+      whiteQueenside: false,
+      blackKingside: false,
+      blackQueenside: false
+    },
+    enPassantTarget: null,
+    history: []
+  };
+
+  // --- Screen state (selection/highlight). Never written into GameState. ---
   let selectedSquare = null;   // Square | null
-  let highlightSquares = [];   // Square[]
+  let selectedMoves = [];      // Move[] — exactly what legalMovesFrom returned
 
   const GLYPHS = {
     white: { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" },
@@ -127,23 +152,9 @@
   };
 
   function pieceAt(square) {
-    return board.pieces.find(
+    return state.board.pieces.find(
       p => p.square.file === square.file && p.square.rank === square.rank
     );
-  }
-
-  // Dispatch from piece type to the matching move function. This switch is
-  // the consumer-side dispatch called for in the contract (gap 1 resolution) —
-  // moves.ts does not choose between the six functions itself.
-  function movesFor(piece) {
-    switch (piece.type) {
-      case "king":   return kingMoves(piece.square, board);
-      case "queen":  return queenMoves(piece.square, board);
-      case "rook":   return rookMoves(piece.square, board);
-      case "bishop": return bishopMoves(piece.square, board);
-      case "knight": return knightMoves(piece.square, board);
-      case "pawn":   return pawnMoves(piece.square, board);
-    }
   }
 
   function squareEquals(a, b) {
@@ -151,28 +162,59 @@
   }
 
   function handleSquareClick(square) {
-    const piece = pieceAt(square);
-
     if (selectedSquare && squareEquals(selectedSquare, square)) {
       // Clicking the selected piece again deselects.
       selectedSquare = null;
-      highlightSquares = [];
-    } else if (piece) {
-      // Only ever call a move function for a square confirmed to hold a
-      // piece (gap 3: empty-square behaviour is not sensible to rely on).
+      selectedMoves = [];
+      render();
+      return;
+    }
+
+    if (selectedSquare) {
+      // Is this square one of the legal destinations for the selection?
+      // Pass back the SAME Move object legalMovesFrom returned — never a
+      // reconstructed { from, to } pair.
+      const move = selectedMoves.find(m => squareEquals(m.to, square));
+
+      if (move) {
+        const result = applyMove(state, move);
+
+        selectedSquare = null;
+        selectedMoves = [];
+
+        if (result.ok) {
+          state = result.state;
+        }
+        // On rejection: selection is already cleared above, no other change.
+
+        render();
+        return;
+      }
+    }
+
+    // Not completing a move: try starting a new selection. legalMovesFrom
+    // itself returns [] for an empty square or a piece belonging to the
+    // side not to move, so no turn check is needed here.
+    const moves = legalMovesFrom(state, square);
+
+    if (moves.length > 0) {
       selectedSquare = square;
-      highlightSquares = movesFor(piece);
+      selectedMoves = moves;
     } else {
-      // Clicking an empty square with nothing selected, or clicking
-      // elsewhere while something is selected, clears the selection.
       selectedSquare = null;
-      highlightSquares = [];
+      selectedMoves = [];
     }
 
     render();
   }
 
   function render() {
+    const board = state.board;
+
+    const indicatorEl = document.getElementById("turn-indicator");
+    indicatorEl.textContent =
+      sideToMove(state) === "white" ? "White to move" : "Black to move";
+
     const boardEl = document.getElementById("board");
     boardEl.innerHTML = "";
     boardEl.style.gridTemplateColumns = `repeat(${board.size}, 72px)`;
@@ -193,7 +235,7 @@
           squareEl.classList.add("selected");
         }
 
-        const isHighlighted = highlightSquares.some(s => squareEquals(s, square));
+        const isHighlighted = selectedMoves.some(m => squareEquals(m.to, square));
         if (isHighlighted) {
           squareEl.classList.add("highlight");
           if (piece) {

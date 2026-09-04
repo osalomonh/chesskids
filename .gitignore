@@ -3,3 +3,4 @@ node_modules/
 # Compiled output. Rebuild with:
 #   npm run build
 moves.js
+game.js

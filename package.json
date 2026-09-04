@@ -5,8 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "tsc moves.ts --module es2020 --target es2020 --ignoreConfig",
+    "build": "tsc game.ts --module es2020 --target es2020 --ignoreConfig",
     "check": "tsc --noEmit",
+     "serve": "python -m http.server 8000",
     "test": "tsx --test moves.test.ts game.test.ts && tsx test.ts && tsx test-generated.ts"
   },
   "keywords": [],
