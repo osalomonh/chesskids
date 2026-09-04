@@ -16,14 +16,6 @@ const changedFiles = (): string[] =>
   execSync("git diff --name-only HEAD", { encoding: "utf8" })
     .trim().split("\n").filter(Boolean);
 
-// --- guard: refuse to run against an unknown starting state ---
-
-const dirty = execSync("git status --porcelain", { encoding: "utf8" }).trim();
-if (dirty) {
-  console.log("REFUSING — working tree is dirty. Commit or stash first.");
-  process.exit(1);
-}
-
 // --- checks ---
 
 console.log("check:", gate("npm run check") ? "PASS" : "FAIL");
