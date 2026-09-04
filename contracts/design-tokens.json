@@ -1,0 +1,116 @@
+{
+  "$comment": "Design tokens. Derived from design-brief.md §5 and §6. Owned by the project lead. Both board-render and visual-design read this; neither edits it. Values here are authoritative — an agent that needs a colour or a size not listed proposes an addition and stops.",
+
+  "color": {
+    "sand": "#F6EDDD",
+    "heeler": "#3D6E9E",
+    "sky": "#A8D4E6",
+    "mango": "#F2A93B",
+    "mint": "#7FC4A0",
+    "coral": "#E4574B",
+    "ink": "#2E3A44",
+
+    "boardLight": "#F3E4C8",
+    "boardDark": "#7FA9C4",
+
+    "$roles": {
+      "pageGround": "sand",
+      "primary": "heeler",
+      "reward": "mango",
+      "success": "mint",
+      "emphasis": "coral",
+      "text": "ink",
+      "pieceSilhouette": "ink"
+    },
+
+    "$rules": [
+      "coral is emphasis only, never error. Nothing in this product reads as an error.",
+      "A wrong or rejected action gets a gentle nudge in heeler, not a red alarm.",
+      "White and black pieces must differ in hue as well as lightness, so the distinction survives poor screens and colour vision differences."
+    ]
+  },
+
+  "type": {
+    "display": {
+      "family": "'Baloo 2', 'Fredoka', system-ui, sans-serif",
+      "weights": [600, 700]
+    },
+    "body": {
+      "family": "'Lexend', system-ui, sans-serif",
+      "weights": [400, 500, 600],
+      "$comment": "Lexend was designed to improve reading performance in children. Do not substitute."
+    },
+    "scale": {
+      "xs": "0.875rem",
+      "sm": "1rem",
+      "md": "1.125rem",
+      "lg": "1.5rem",
+      "xl": "2rem",
+      "display": "2.75rem"
+    },
+    "lineHeight": {
+      "tight": 1.2,
+      "normal": 1.5
+    },
+    "$rules": [
+      "Sentence case everywhere. No all-caps labels.",
+      "No eyebrow labels above headings.",
+      "No single-word accenting inside headlines.",
+      "Body text never smaller than 1rem. These are beginner readers."
+    ]
+  },
+
+  "space": {
+    "1": "0.25rem",
+    "2": "0.5rem",
+    "3": "0.75rem",
+    "4": "1rem",
+    "6": "1.5rem",
+    "8": "2rem",
+    "12": "3rem",
+    "16": "4rem"
+  },
+
+  "radius": {
+    "sm": "0.5rem",
+    "md": "0.75rem",
+    "lg": "1.25rem",
+    "pill": "999px"
+  },
+
+  "touch": {
+    "minTarget": "64px",
+    "minGap": "12px",
+    "$comment": "Roughly double the adult minimum. Ages 6-8 have developing fine motor control. This is a floor, not a target."
+  },
+
+  "motion": {
+    "pieceMove": "180ms",
+    "selection": "120ms",
+    "celebration": "600ms",
+    "easing": "cubic-bezier(0.2, 0, 0, 1)",
+    "$rules": [
+      "Motion answers an action. A piece moving, a node unlocking, a celebration firing.",
+      "No ambient motion, no scroll-triggered fades, no hover effects on everything.",
+      "prefers-reduced-motion must be respected. Reduce to instant, do not remove feedback."
+    ]
+  },
+
+  "board": {
+    "minSquare": "64px",
+    "$rules": [
+      "Square colours derive from board.size. Never hardcode a grid.",
+      "Legal destinations on empty squares: a filled dot.",
+      "Legal destinations on capturable pieces: a ring around the square.",
+      "This affordance is the single most important teaching element in the product. It is never subtle."
+    ]
+  },
+
+  "quality": {
+    "contrast": "WCAG AA",
+    "keyboardFocus": "visible, always",
+    "responsive": "tablet and desktop equally; must not break on mobile",
+    "trackers": "none",
+    "externalLinks": "none"
+  }
+}
