@@ -273,3 +273,74 @@ export function applyMove(state: GameState, move: Move): MoveResult {
     },
   };
 }
+
+// --- consumer surface -----------------------------------------------------
+// §11. board-render and anything else above this layer use exactly these
+// (plus applyMove). Nothing above reaches into GameState to compute a chess
+// answer by hand.
+
+/**
+ * Whose turn it is. §4: one field, read it. There is no turn counter to
+ * divide, and no derivation from history length — a state can be handed to
+ * this layer mid-game with a seeded or empty history and the field is still
+ * the truth.
+ */
+export function sideToMove(state: GameState): Color {
+  return state.sideToMove;
+}
+
+/**
+ * The turn filter, and the reason a renderer must never call `movesFrom`
+ * itself: `movesFrom` answers what a piece can do, not whether it may, and
+ * whose turn it is lives here rather than on the Board.
+ *
+ * Returns `[]` for an empty square and for a piece belonging to the side not
+ * to move. Otherwise the generated list is returned as it came back. No move
+ * generation happens here — the only thing added on top of moves.ts is the
+ * turn check.
+ *
+ * Pseudo-legal, like everything downstream of moves.ts: "legal" here means
+ * "generated, and it is your turn". Check is not detected anywhere in this
+ * system, so a move that hangs a king is still returned.
+ */
+export function legalMovesFrom(state: GameState, from: Square): Move[] {
+  const mover = pieceOn(state.board, from);
+
+  if (mover === undefined) {
+    return [];
+  }
+
+  if (mover.color !== state.sideToMove) {
+    return [];
+  }
+
+  return movesFrom(from, state.board);
+}
+
+/**
+ * Threefold repetition — the only draw this layer can see.
+ *
+ * It counts occurrences of `history[history.length - 1]`, the key applyMove
+ * appended for the current position, and never recomputes a key from `state`.
+ * §11: two ways to get the same number is one way too many, and a recomputed
+ * key that disagreed with a stored one would produce a wrong draw with no
+ * trail back to why. `positionKey` is the one producer and stays private.
+ */
+export function isRepetitionDraw(state: GameState): boolean {
+  const current = state.history[state.history.length - 1];
+
+  // Empty history: nothing has been played, so nothing has repeated.
+  if (current === undefined) {
+    return false;
+  }
+
+  let count = 0;
+
+  for (const key of state.history) {
+    if (key === current) {
+      count++;
+    }
+  }
+
+  return count >= 3;
+}

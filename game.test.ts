@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { applyMove } from "./game.js";
+import {
+  applyMove,
+  isRepetitionDraw,
+  legalMovesFrom,
+  sideToMove,
+} from "./game.js";
 import type {
   CastlingRights,
   GameState,
@@ -8,7 +13,8 @@ import type {
   MoveResult,
   PositionKey,
 } from "./game.js";
-import type { Board, Color, Piece, Square } from "./moves.js";
+import { movesFrom } from "./moves.js";
+import type { Board, Color, Move, Piece, Square } from "./moves.js";
 
 // --- fixtures -------------------------------------------------------------
 
@@ -616,4 +622,349 @@ test("a key is appended for every applied move and for no rejected one", () => {
 
   const accepted = expectOk(applyMove(start, { from: at(1, 0), to: at(2, 2) }));
   assert.strictEqual(accepted.history.length, 1);
+});
+
+// --- sideToMove -----------------------------------------------------------
+
+const destinationKeys = (moves: Move[]): string[] =>
+  moves.map(move => `${move.to.file},${move.to.rank}`).sort();
+
+test("sideToMove reads the field, for both colours", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+
+  assert.strictEqual(sideToMove(makeState(board, "white")), "white");
+  assert.strictEqual(sideToMove(makeState(board, "black")), "black");
+});
+
+test("sideToMove reads the field, not the length of history", () => {
+  // A state handed in mid-game: three keys in history, and white still to
+  // move. Section 4 says the field is the truth, with no derivation from
+  // history length and no turn counter to divide.
+  const board: Board = {
+    size: 8,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+  const state = makeState(board, "white", ALL_RIGHTS, null, ["a", "b", "c"]);
+
+  assert.strictEqual(sideToMove(state), "white");
+});
+
+test("sideToMove follows applyMove flipping the field", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(1, 7), color: "black", type: "knight" },
+    ],
+  };
+  const start = makeState(board, "white", NO_RIGHTS);
+
+  const one = expectOk(applyMove(start, { from: at(1, 0), to: at(2, 2) }));
+  const two = expectOk(applyMove(one, { from: at(1, 7), to: at(2, 5) }));
+
+  assert.strictEqual(sideToMove(start), "white");
+  assert.strictEqual(sideToMove(one), "black");
+  assert.strictEqual(sideToMove(two), "white");
+});
+
+// --- legalMovesFrom -------------------------------------------------------
+
+test("legalMovesFrom returns the generated moves for the side to move", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(4, 7), color: "black", type: "king" },
+    ],
+  };
+
+  const moves = legalMovesFrom(makeState(board, "white"), at(1, 0));
+
+  // The same list moves.ts produced. The only thing this layer adds on top of
+  // movesFrom is the turn check.
+  assert.ok(moves.length > 0);
+  assert.deepStrictEqual(
+    destinationKeys(moves),
+    destinationKeys(movesFrom(at(1, 0), board))
+  );
+  for (const move of moves) {
+    assert.deepStrictEqual(move.from, at(1, 0));
+  }
+});
+
+test("legalMovesFrom returns [] for that same piece when it is not its turn", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(4, 7), color: "black", type: "king" },
+    ],
+  };
+
+  // The board is identical in both calls. Only the turn differs, and the turn
+  // is not on the Board -- which is why a renderer cannot call movesFrom.
+  assert.ok(legalMovesFrom(makeState(board, "white"), at(1, 0)).length > 0);
+  assert.deepStrictEqual(
+    legalMovesFrom(makeState(board, "black"), at(1, 0)),
+    []
+  );
+});
+
+test("legalMovesFrom filters in the other direction too", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(4, 7), color: "black", type: "king" },
+    ],
+  };
+
+  assert.ok(legalMovesFrom(makeState(board, "black"), at(4, 7)).length > 0);
+  assert.deepStrictEqual(
+    legalMovesFrom(makeState(board, "white"), at(4, 7)),
+    []
+  );
+});
+
+test("legalMovesFrom returns [] for an empty square, whoever is to move", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+
+  assert.deepStrictEqual(
+    legalMovesFrom(makeState(board, "white"), at(5, 5)),
+    []
+  );
+  assert.deepStrictEqual(
+    legalMovesFrom(makeState(board, "black"), at(5, 5)),
+    []
+  );
+});
+
+test("legalMovesFrom returns [] for a square off this board", () => {
+  const board: Board = {
+    size: 5,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+
+  // Dimensions come from board.size: (6,6) is off a 5x5 board, and no piece
+  // stands there.
+  assert.deepStrictEqual(
+    legalMovesFrom(makeState(board, "white"), at(6, 6)),
+    []
+  );
+});
+
+test("legalMovesFrom works on a board that is not eight wide", () => {
+  const board: Board = {
+    size: 5,
+    pieces: [
+      { square: at(2, 2), color: "white", type: "king" },
+      { square: at(0, 4), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+
+  const moves = legalMovesFrom(state, at(2, 2));
+
+  assert.strictEqual(moves.length, 8);
+  for (const move of moves) {
+    assert.ok(move.to.file >= 0 && move.to.file < board.size);
+    assert.ok(move.to.rank >= 0 && move.to.rank < board.size);
+  }
+  assert.deepStrictEqual(legalMovesFrom(state, at(0, 4)), []);
+});
+
+test("legalMovesFrom mutates nothing", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(4, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", ALL_RIGHTS, null, ["seeded-key"]);
+  const snapshot = structuredClone(state);
+
+  legalMovesFrom(state, at(1, 0));
+  legalMovesFrom(state, at(4, 7));
+  legalMovesFrom(state, at(5, 5));
+
+  assert.deepStrictEqual(state, snapshot);
+});
+
+test("every move legalMovesFrom offers is accepted by applyMove", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(2, 2), color: "black", type: "pawn" },
+      { square: at(4, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+  const moves = legalMovesFrom(state, at(1, 0));
+
+  assert.ok(moves.length > 0);
+  for (const move of moves) {
+    expectOk(applyMove(state, move));
+  }
+});
+
+test("a move offered when it is not your turn is rejected by applyMove", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(4, 7), color: "black", type: "king" },
+    ],
+  };
+  const whiteToMove = makeState(board, "white", NO_RIGHTS);
+  const blackToMove = makeState(board, "black", NO_RIGHTS);
+
+  const move = legalMovesFrom(whiteToMove, at(1, 0))[0];
+  if (move === undefined) {
+    throw new Error("expected at least one knight move");
+  }
+
+  assert.deepStrictEqual(legalMovesFrom(blackToMove, at(1, 0)), []);
+  expectRejected(applyMove(blackToMove, move), "wrong-side");
+});
+
+// --- isRepetitionDraw -----------------------------------------------------
+
+test("isRepetitionDraw is false on an empty history", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+
+  assert.strictEqual(isRepetitionDraw(makeState(board)), false);
+});
+
+test("isRepetitionDraw is false at two occurrences of the last key", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+  const state = makeState(board, "white", ALL_RIGHTS, null, [
+    "p",
+    "q",
+    "p",
+    "r",
+    "p",
+    "q",
+  ]);
+
+  // 'q' is the last key and appears twice. 'p' appears three times but is not
+  // the current position, so it does not end the game.
+  assert.strictEqual(isRepetitionDraw(state), false);
+});
+
+test("isRepetitionDraw is true at three occurrences of the last key", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+  const state = makeState(board, "white", ALL_RIGHTS, null, [
+    "q",
+    "p",
+    "q",
+    "r",
+    "q",
+  ]);
+
+  assert.strictEqual(isRepetitionDraw(state), true);
+});
+
+test("isRepetitionDraw stays true past three occurrences", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+  const state = makeState(board, "white", ALL_RIGHTS, null, [
+    "q",
+    "q",
+    "q",
+    "q",
+  ]);
+
+  assert.strictEqual(isRepetitionDraw(state), true);
+});
+
+test("isRepetitionDraw is false after a single applied move", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+  const start = makeState(board, "white", NO_RIGHTS);
+
+  const one = expectOk(applyMove(start, { from: at(1, 0), to: at(2, 2) }));
+
+  assert.strictEqual(one.history.length, 1);
+  assert.strictEqual(isRepetitionDraw(one), false);
+});
+
+test("isRepetitionDraw fires on the third occurrence of a shuffled position", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(1, 7), color: "black", type: "knight" },
+    ],
+  };
+
+  // Knights out and back. The position after white's first move recurs after
+  // the fifth move and again after the ninth.
+  const shuffle: Move[] = [
+    { from: at(1, 0), to: at(2, 2) },
+    { from: at(1, 7), to: at(2, 5) },
+    { from: at(2, 2), to: at(1, 0) },
+    { from: at(2, 5), to: at(1, 7) },
+  ];
+
+  let state = makeState(board, "white", NO_RIGHTS);
+  const drawAfterEachMove: boolean[] = [];
+
+  for (let i = 0; i < 9; i++) {
+    const move = shuffle[i % shuffle.length];
+    if (move === undefined) {
+      throw new Error("shuffle index out of range");
+    }
+    state = expectOk(applyMove(state, move));
+    drawAfterEachMove.push(isRepetitionDraw(state));
+  }
+
+  assert.strictEqual(state.history.length, 9);
+  assert.strictEqual(
+    state.history.filter(key => key === lastKey(state)).length,
+    3
+  );
+  assert.deepStrictEqual(drawAfterEachMove, [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+  ]);
+});
+
+test("isRepetitionDraw mutates nothing", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [{ square: at(1, 0), color: "white", type: "knight" }],
+  };
+  const state = makeState(board, "white", ALL_RIGHTS, null, ["q", "q", "q"]);
+  const snapshot = structuredClone(state);
+
+  assert.strictEqual(isRepetitionDraw(state), true);
+  assert.deepStrictEqual(state, snapshot);
 });
