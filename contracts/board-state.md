@@ -110,7 +110,7 @@ Consumers must not assume the returned squares are in any particular order.
 
 ```ts
 
-movesFrom(board, from): Move[]
+movesFrom(from, board): Move[]
 
 
 ```
