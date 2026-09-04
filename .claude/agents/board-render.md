@@ -30,8 +30,25 @@ looking at. Selection, highlighting, hover, drag position, animation, and
 board orientation are all screen state and live in your layer.
 
 Board state is always described from white's perspective. If the board is
-displayed for a black player, flip it on the way to the screen. Never store
-an orientation in the position.
+displayed for a black player, turn it around on the way to the screen. That
+is a full 180-degree rotation, which means reversing BOTH the rank order and
+the file order. Reversing ranks alone is a mirror, not a rotation, and it
+leaves the kings and queens on the wrong sides of the board.
+
+The fastest way to tell a rotation from a mirror on a standard 8x8 start,
+reading each player's own back rank left to right from where they sit:
+
+- White's view: rook, knight, bishop, QUEEN, KING, bishop, knight, rook.
+  Queen 4th from the left, king 5th.
+- Black's view: rook, knight, bishop, KING, QUEEN, bishop, knight, rook.
+  King 4th from the left, queen 5th.
+
+If the queen is 4th in both views, you have mirrored the board instead of
+rotating it. A second check: the same corner stays light in both views,
+because square colour comes from the canonical `file + rank` and those never
+change.
+
+Never store an orientation in the position.
 
 ## Constraints
 

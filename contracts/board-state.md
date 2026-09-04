@@ -54,14 +54,27 @@ Board state is always described from white's perspective. Rank 0 is white's
 home rank in the data, always, regardless of who is playing or what the
 screen shows.
 
-A renderer displaying the board for a black player flips it on the way to the
-screen:
+A renderer displaying the board for a black player turns it around on the way
+to the screen. That is a 180-degree rotation, so **both** orders reverse:
 
 ```ts
 const ranksTopToBottom = playingAs === "white"
   ? [...ranks].reverse()
   : ranks;
+
+const filesLeftToRight = playingAs === "white"
+  ? files
+  : [...files].reverse();
 ```
+
+Reversing ranks alone is a mirror, not a rotation: it leaves each player's
+king and queen swapped left-for-right. On a standard 8x8 start, read each
+player's own back rank left to right from where they sit — white sees queen
+4th and king 5th, black sees king 4th and queen 5th. If the queen is 4th in
+both views, the board has been mirrored.
+
+Coordinates are never transformed. A `{file, rank}` pair means the same
+square in either view; only the draw order changes.
 
 That is a rendering decision made in the rendering layer. `Board` never
 carries an orientation, and no function in `moves.ts` accepts one.
