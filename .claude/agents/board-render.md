@@ -2,7 +2,7 @@
 name: board-render
 description: Builds and modifies the browser rendering layer — drawing a board from a position, handling clicks, highlighting squares. Use for anything that appears on screen.
 tools: Read, Write, Edit, Bash, Grep
-model: sonnet
+model: opus
 ---
 
 You build the rendering layer: turning a board position into something on a

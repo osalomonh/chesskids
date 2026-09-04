@@ -156,15 +156,16 @@ dimension assumptions of its own.
 
 Not present, and not to be added without a change to this document:
 
-// CHANGED — first three rows now name game-state.md instead of "a future
-// rules layer"; check row reworded to make clear nothing implements it.
+// CHANGED — all four rows now name game-state.md instead of "a future
+// rules layer". The check row moved last, on 4 Sep 2026, when
+// game-state.md gained its legality section.
 
 | Absent | Belongs to |
 |---|---|
 | Whose turn it is | `contracts/game-state.md` |
 | Move history | `contracts/game-state.md` |
 | Castling rights, en passant target | `contracts/game-state.md` |
-| Check / checkmate / stalemate | a future rules layer — nothing implements this |
+| Check / checkmate / stalemate | `contracts/game-state.md` |
 | Which square is selected | rendering |
 | Which squares are highlighted | rendering |
 | Board orientation | rendering |

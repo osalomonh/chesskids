@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert";
 import {
   applyMove,
+  gameStatus,
+  isInCheck,
   isRepetitionDraw,
   legalMovesFrom,
   sideToMove,
@@ -9,6 +11,7 @@ import {
 import type {
   CastlingRights,
   GameState,
+  GameStatus,
   MoveRejection,
   MoveResult,
   PositionKey,
@@ -764,7 +767,12 @@ test("legalMovesFrom works on a board that is not eight wide", () => {
     size: 5,
     pieces: [
       { square: at(2, 2), color: "white", type: "king" },
-      { square: at(0, 4), color: "black", type: "king" },
+      // A rook, not a king: this test is about board-size independence, and
+      // on a 5x5 every square is adjacent to some square in the white king's
+      // ring, so a black king would remove one of the eight. The rook attacks
+      // file 0 and rank 4 only, which the ring (files 1-3, ranks 1-3) never
+      // touches. King adjacency is covered on its own further down.
+      { square: at(0, 4), color: "black", type: "rook" },
     ],
   };
   const state = makeState(board, "white", NO_RIGHTS);
@@ -966,5 +974,467 @@ test("isRepetitionDraw mutates nothing", () => {
   const snapshot = structuredClone(state);
 
   assert.strictEqual(isRepetitionDraw(state), true);
+  assert.deepStrictEqual(state, snapshot);
+});
+
+// --- legality: isInCheck --------------------------------------------------
+// §12. moves.ts is still pseudo-legal; everything below is this layer asking
+// it more often, never reimplementing it.
+
+// Destinations as sorted "file,rank" strings, so a test can compare sets
+// without depending on the order moves come back in.
+const destinations = (moves: Move[]): string[] =>
+  moves.map(move => `${move.to.file},${move.to.rank}`).sort();
+
+function onlyMove(moves: Move[]): Move {
+  assert.strictEqual(moves.length, 1, `expected exactly one move, got ${moves.length}`);
+  const move = moves[0];
+  if (move === undefined) {
+    throw new Error("expected one move, got none");
+  }
+  return move;
+}
+
+function expectStatus(state: GameState, expected: GameStatus): void {
+  assert.strictEqual(gameStatus(state), expected);
+}
+
+test("isInCheck is true when the side to move has a king under attack", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(4, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+
+  assert.strictEqual(isInCheck(makeState(board, "white", NO_RIGHTS)), true);
+});
+
+test("isInCheck is false in a quiet position", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(0, 5), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+
+  assert.strictEqual(isInCheck(makeState(board, "white", NO_RIGHTS)), false);
+});
+
+test("isInCheck asks about the side to move, not the other king", () => {
+  // Black's king is the one being attacked, on file 0.
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(0, 0), color: "white", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+
+  assert.strictEqual(isInCheck(makeState(board, "white", NO_RIGHTS)), false);
+  assert.strictEqual(isInCheck(makeState(board, "black", NO_RIGHTS)), true);
+});
+
+test("isInCheck is false when the side to move has no king at all", () => {
+  // The ordinary case on the tier-1 teaching boards, not an edge case.
+  const board: Board = {
+    size: 5,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(1, 4), color: "black", type: "rook" },
+    ],
+  };
+
+  assert.strictEqual(isInCheck(makeState(board, "white", NO_RIGHTS)), false);
+});
+
+test("a pawn's forward push is not an attack, and needs no special case", () => {
+  // A black pawn on (4,1) pushes to (4,0) only if (4,0) is empty. The white
+  // king stands there, so no push is generated onto it and the king is not in
+  // check. The pawn does attack (3,0) and (5,0), which the next assertion
+  // shows by putting the king on one of them.
+  const pushBoard: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(4, 1), color: "black", type: "pawn" },
+    ],
+  };
+  assert.strictEqual(isInCheck(makeState(pushBoard, "white", NO_RIGHTS)), false);
+
+  const captureBoard: Board = {
+    size: 8,
+    pieces: [
+      { square: at(3, 0), color: "white", type: "king" },
+      { square: at(4, 1), color: "black", type: "pawn" },
+    ],
+  };
+  assert.strictEqual(isInCheck(makeState(captureBoard, "white", NO_RIGHTS)), true);
+});
+
+// --- legality: pins -------------------------------------------------------
+
+test("a pinned knight has pseudo-legal moves but no legal ones", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(4, 1), color: "white", type: "knight" },
+      { square: at(4, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+
+  // moves.ts still offers them: it knows nothing about check.
+  assert.ok(movesFrom(at(4, 1), board).length > 0);
+
+  // An empty result no longer means "not your piece".
+  assert.deepStrictEqual(legalMovesFrom(state, at(4, 1)), []);
+});
+
+test("a pinned rook may only move along the pin line", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(4, 3), color: "white", type: "rook" },
+      { square: at(4, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+
+  const pseudo = movesFrom(at(4, 3), board);
+  const legal = legalMovesFrom(state, at(4, 3));
+
+  assert.ok(pseudo.length > legal.length);
+  assert.deepStrictEqual(
+    destinations(legal),
+    destinations([
+      { from: at(4, 3), to: at(4, 1) },
+      { from: at(4, 3), to: at(4, 2) },
+      { from: at(4, 3), to: at(4, 4) },
+      { from: at(4, 3), to: at(4, 5) },
+      { from: at(4, 3), to: at(4, 6) },
+      // Capturing the pinning rook stays on the line, so it is legal.
+      { from: at(4, 3), to: at(4, 7) },
+    ])
+  );
+});
+
+// --- legality: kings ------------------------------------------------------
+
+test("a king may not move into an attacked square", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(3, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+
+  // Not in check where it stands; file 3 is what it must avoid.
+  assert.strictEqual(isInCheck(state), false);
+  assert.ok(
+    destinations(movesFrom(at(4, 0), board)).includes("3,0"),
+    "moves.ts should still offer the attacked square"
+  );
+
+  assert.deepStrictEqual(destinations(legalMovesFrom(state, at(4, 0))), [
+    "4,1",
+    "5,0",
+    "5,1",
+  ]);
+});
+
+test("a king may not step next to the enemy king, on a 5x5 board", () => {
+  const board: Board = {
+    size: 5,
+    pieces: [
+      { square: at(2, 2), color: "white", type: "king" },
+      { square: at(0, 4), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+
+  assert.strictEqual(movesFrom(at(2, 2), board).length, 8);
+
+  const legal = legalMovesFrom(state, at(2, 2));
+
+  assert.strictEqual(legal.length, 7);
+  assert.ok(!destinations(legal).includes("1,3"));
+});
+
+test("a king may not capture a defended piece", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      // Checking rook, defended along the file by the second one.
+      { square: at(4, 1), color: "black", type: "rook" },
+      { square: at(4, 5), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+
+  assert.strictEqual(isInCheck(state), true);
+
+  const legal = legalMovesFrom(state, at(4, 0));
+
+  assert.ok(destinations(movesFrom(at(4, 0), board)).includes("4,1"));
+  assert.ok(!destinations(legal).includes("4,1"));
+  // The two squares off the rooks' file and rank.
+  assert.deepStrictEqual(destinations(legal), ["3,0", "5,0"]);
+});
+
+test("in check, only the moves that address the check are legal", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(3, 3), color: "white", type: "rook" },
+      { square: at(4, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+
+  assert.ok(movesFrom(at(3, 3), board).length > 1);
+
+  // The one interposition on the checking file.
+  const blocking = onlyMove(legalMovesFrom(state, at(3, 3)));
+
+  assert.deepStrictEqual(blocking.to, at(4, 3));
+
+  const after = expectOk(applyMove(state, blocking));
+
+  assert.strictEqual(sideToMove(after), "black");
+  assert.strictEqual(isInCheck({ ...after, sideToMove: "white" }), false);
+});
+
+// --- legality: applyMove --------------------------------------------------
+
+test("applyMove rejects a self-check move as 'illegal-move'", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(4, 1), color: "white", type: "knight" },
+      { square: at(4, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+  const pseudo = movesFrom(at(4, 1), board);
+
+  assert.ok(pseudo.length > 0);
+
+  // Every move the pinned knight has hangs its own king, and every one of
+  // them comes back as 'illegal-move'. There is deliberately no separate
+  // rejection reason for self-check.
+  for (const move of pseudo) {
+    expectRejected(applyMove(state, move), "illegal-move");
+  }
+});
+
+test("applyMove rejects a king walking into an attacked square", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(3, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+
+  expectRejected(
+    applyMove(state, { from: at(4, 0), to: at(3, 0) }),
+    "illegal-move"
+  );
+
+  // The state is untouched by the rejection, and a legal escape still works.
+  assert.strictEqual(state.history.length, 0);
+  expectOk(applyMove(state, { from: at(4, 0), to: at(5, 0) }));
+});
+
+test("a rejected self-check move leaves the state and its board untouched", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(4, 1), color: "white", type: "knight" },
+      { square: at(4, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+  const snapshot = structuredClone(state);
+
+  expectRejected(applyMove(state, { from: at(4, 1), to: at(5, 3) }), "illegal-move");
+
+  assert.deepStrictEqual(state, snapshot);
+});
+
+test("every move legalMovesFrom offers in a pinned position is accepted", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(4, 3), color: "white", type: "rook" },
+      { square: at(4, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+  const legal = legalMovesFrom(state, at(4, 3));
+
+  assert.ok(legal.length > 0);
+
+  for (const move of legal) {
+    expectOk(applyMove(state, move));
+  }
+});
+
+// --- gameStatus -----------------------------------------------------------
+
+// Back-rank mate. Black king on (6,7) is boxed in by its own pawns and checked
+// along rank 7 by the white rook on (4,7). Moving to (5,7) or (7,7) stays on
+// the rook's rank, which is why the filter has to test the resulting position
+// rather than the current one.
+const MATE_BOARD: Board = {
+  size: 8,
+  pieces: [
+    { square: at(4, 0), color: "white", type: "king" },
+    { square: at(4, 7), color: "white", type: "rook" },
+    { square: at(6, 7), color: "black", type: "king" },
+    { square: at(5, 6), color: "black", type: "pawn" },
+    { square: at(6, 6), color: "black", type: "pawn" },
+    { square: at(7, 6), color: "black", type: "pawn" },
+  ],
+};
+
+// Black king on (7,7) with the white queen on (5,6) covering every square it
+// could move to, and none of the square it stands on.
+const STALEMATE_BOARD: Board = {
+  size: 8,
+  pieces: [
+    { square: at(0, 0), color: "white", type: "king" },
+    { square: at(5, 6), color: "white", type: "queen" },
+    { square: at(7, 7), color: "black", type: "king" },
+  ],
+};
+
+test("gameStatus returns 'checkmate' for a real mate", () => {
+  const state = makeState(MATE_BOARD, "black", NO_RIGHTS);
+
+  assert.strictEqual(isInCheck(state), true);
+
+  for (const piece of MATE_BOARD.pieces) {
+    if (piece.color === "black") {
+      assert.deepStrictEqual(legalMovesFrom(state, piece.square), []);
+    }
+  }
+
+  expectStatus(state, "checkmate");
+});
+
+test("gameStatus returns 'stalemate' for a real stalemate", () => {
+  const state = makeState(STALEMATE_BOARD, "black", NO_RIGHTS);
+
+  assert.strictEqual(isInCheck(state), false);
+  assert.deepStrictEqual(legalMovesFrom(state, at(7, 7)), []);
+
+  expectStatus(state, "stalemate");
+
+  // The side that can still move is not stalemated.
+  expectStatus(makeState(STALEMATE_BOARD, "white", NO_RIGHTS), "playing");
+});
+
+test("gameStatus returns 'check' when the king is attacked but can escape", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(4, 7), color: "black", type: "rook" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS);
+
+  assert.ok(legalMovesFrom(state, at(4, 0)).length > 0);
+  expectStatus(state, "check");
+});
+
+test("gameStatus returns 'playing' for a quiet position", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+
+  expectStatus(makeState(board, "white", NO_RIGHTS), "playing");
+});
+
+test("gameStatus returns 'repetition-draw' when the last key has occurred three times", () => {
+  const board: Board = {
+    size: 8,
+    pieces: [
+      { square: at(4, 0), color: "white", type: "king" },
+      { square: at(0, 7), color: "black", type: "king" },
+    ],
+  };
+  const state = makeState(board, "white", NO_RIGHTS, null, ["k1", "k2", "k1", "k2", "k1"]);
+
+  assert.strictEqual(isRepetitionDraw(state), true);
+  expectStatus(state, "repetition-draw");
+});
+
+test("mate outranks repetition: a mated king is not a draw", () => {
+  const state = makeState(MATE_BOARD, "black", NO_RIGHTS, null, ["k1", "k1", "k1"]);
+
+  assert.strictEqual(isRepetitionDraw(state), true);
+  expectStatus(state, "checkmate");
+});
+
+test("stalemate outranks repetition too", () => {
+  const state = makeState(STALEMATE_BOARD, "black", NO_RIGHTS, null, ["k1", "k1", "k1"]);
+
+  assert.strictEqual(isRepetitionDraw(state), true);
+  expectStatus(state, "stalemate");
+});
+
+test("gameStatus is 'playing' on a kingless teaching board that has moves", () => {
+  const board: Board = {
+    size: 5,
+    pieces: [
+      { square: at(1, 0), color: "white", type: "knight" },
+      { square: at(1, 4), color: "black", type: "rook" },
+    ],
+  };
+
+  expectStatus(makeState(board, "white", NO_RIGHTS), "playing");
+});
+
+test("isInCheck, legalMovesFrom and gameStatus mutate nothing", () => {
+  const state = makeState(MATE_BOARD, "black", NO_RIGHTS, null, ["seeded-key"]);
+  const snapshot = structuredClone(state);
+
+  isInCheck(state);
+  legalMovesFrom(state, at(6, 7));
+  legalMovesFrom(state, at(6, 6));
+  gameStatus(state);
+
   assert.deepStrictEqual(state, snapshot);
 });
