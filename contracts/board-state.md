@@ -103,18 +103,66 @@ Consumers must not assume the returned squares are in any particular order.
 
 ---
 
+// NEW — entire section. Added 4 Sep 2026 in response to gap 1 below.
+
+## Dispatch and the `Move` type
+
+```ts
+type Move = { from: Square; to: Square };
+
+movesFrom(from: Square, board: Board): Move[]
+```
+
+`movesFrom` reads the piece at `from`, dispatches to the matching function
+above, and wraps each returned square as a `Move`.
+
+Argument order matches the six functions above: `from` first, `board` second.
+
+It is additive. The six per-piece functions keep their `Square[]` signatures
+and their existing tests. `movesFrom` wraps them; it does not replace them
+and does not reimplement any of their logic.
+
+Guarantees are inherited from whichever function it dispatches to, plus:
+
+- **Empty `from` returns `[]`.** No piece, no dispatch.
+- **`from` is echoed.** Every `Move` in the result has `move.from` equal to
+  the `from` argument.
+
+Why a `Move` rather than a bare `Square`: the game layer receives a move back
+from a caller and applies it. A destination square alone doesn't say where
+the piece came from, so the caller would have to carry the origin separately
+and the two could disagree. One object, both ends, no chance to mismatch.
+
+`Move` carries nothing else. Not `isCapture`, not `isPromotion`, not a piece
+reference. Anything derivable from `from`, `to`, and the board does not go in
+the move.
+
+Two things to get right when implementing it:
+
+`Board` holds `pieces: Piece[]`, and each `Piece` carries its own `square`.
+There is no square-indexed array. A consumer looking up "what is on this
+square" scans the list. `movesFrom` does the same.
+
+Board size is `board.size` and boards are square. `movesFrom` adds no
+dimension assumptions of its own.
+
+---
+
 ## Deliberately not in board state
 
 `Board` describes a position. It does not describe a game or a screen.
 
 Not present, and not to be added without a change to this document:
 
+// CHANGED — first three rows now name game-state.md instead of "a future
+// rules layer"; check row reworded to make clear nothing implements it.
+
 | Absent | Belongs to |
 |---|---|
-| Whose turn it is | game state |
-| Move history | game state |
-| Check / checkmate / stalemate | a future rules layer |
-| Castling rights, en passant target | a future rules layer |
+| Whose turn it is | `contracts/game-state.md` |
+| Move history | `contracts/game-state.md` |
+| Castling rights, en passant target | `contracts/game-state.md` |
+| Check / checkmate / stalemate | a future rules layer — nothing implements this |
 | Which square is selected | rendering |
 | Which squares are highlighted | rendering |
 | Board orientation | rendering |
@@ -123,6 +171,13 @@ Not present, and not to be added without a change to this document:
 The most likely violation is a renderer wanting somewhere to put
 `selectedSquare` and adding it to `Board` because that is convenient. Don't.
 Selection is screen state and lives with the screen.
+
+// NEW — paragraph. Second violation now plausible because a game layer exists.
+
+The second most likely violation is a game layer wanting to store
+`sideToMove` on the `Board` so that `movesFrom` can filter by turn. Don't.
+`movesFrom` answers what a piece can do, not whether it may. The turn filter
+is `legalMovesFrom` in the game layer.
 
 ---
 
@@ -136,11 +191,14 @@ These are real and unresolved. A consumer will hit them.
 `Board` alone, and can choose which move function to call from the piece
 itself.
 
-Dispatch from `type` to a move function lives in the consumer, not here.
-`moves.ts` exports six functions and does not choose between them. If more
-than one consumer ends up writing the same switch, that is the signal to add
-a dispatcher to `moves.ts` — and that would be another change to this
-document.
+// CHANGED — replaces the paragraph that said dispatch lives in the consumer.
+// That paragraph named the condition for moving it; the condition was met.
+
+Dispatch from `type` to a move function lived in the consumer until 4 Sep
+2026. Two consumers needed it — the renderer, to know what a tapped piece can
+do, and the game layer, to validate a move before applying it. That is the
+signal this gap named, so dispatch moved into `moves.ts`. See *Dispatch and
+the `Move` type* above.
 
 **2. ~~`pawnMoves` has a different signature.~~ Resolved 4 Sep 2026.**
 
@@ -158,11 +216,21 @@ a piece that isn't there: `kingMoves`, `knightMoves`, `rookMoves`,
 occupied square as capturable in that case, so `rookMoves` on an empty
 square returned moves for a piece that wasn't there.
 
+// CHANGED — promotion reasoning was half-obsolete once Move[] existed;
+// en passant paragraph now points at where the state actually lives.
+
 **4. Not implemented.**
 
-Castling, en passant, promotion, check detection. En passant needs move
-history in `Board`; promotion needs a return type richer than `Square[]`.
-Both are contract changes, not missing logic.
+Castling, en passant, promotion, check detection.
+
+Promotion previously needed a return type richer than `Square[]`. `Move[]`
+is that type — adding an `isPromotion` field is now a small change rather
+than a structural one. It is still unimplemented and still a contract change.
+
+En passant needs move history, which `Board` does not have and will not get;
+it lives in `GameState`. Note that `contracts/game-state.md` stores an en
+passant target and castling rights for position identity only. Storing them
+does not authorize generating those moves, and `moves.ts` generates neither.
 
 ---
 

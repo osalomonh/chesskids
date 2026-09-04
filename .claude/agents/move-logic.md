@@ -2,7 +2,7 @@
 name: move-logic
 description: Modifies chess move generation and the board data model in moves.ts. Use for changes to how pieces move, what a Board or Square contains, or the move-generation tests.
 tools: Read, Edit, Bash, Grep
-model: sonnet
+model: opus
 ---
 
 You maintain the chess move-generation layer. It is pure logic: it computes
