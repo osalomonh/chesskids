@@ -328,3 +328,96 @@ one.
 
 **`hello.ts` deleted.** Intentional — the toolchain-proving file had served its
 purpose and `tsconfig.json` was sweeping it into the compilation.
+
+## 3 Sep 2026 — Phase 3, the eval harness
+
+Ten commits, `3960540` through `7342d87`.
+
+**Supersedes the previous entry.** That entry closed by saying `test.ts` and
+`test-generated.ts` "still cannot fail" the gate, and that only
+`moves.test.ts` sets an exit code. That is no longer true as of `3960540`.
+The claim stands in that entry as written; this is the correction.
+
+**Tests moved from counting to comparing.** `moves.test.ts` converted from the
+script style to `node:test`, with `assert.deepStrictEqual` against the actual
+squares returned rather than a count of them. Three cases: knight in the
+corner, knight in the centre, rook in the corner. `test.ts` still counts —
+`check(label, actual, expected)` compares `actual.length` to a number — and
+that remains a gap.
+
+**`process.exitCode` added to both script suites.** `3960540` appended
+`if (failed > 0) process.exitCode = 1;` to `test.ts` and `test-generated.ts`.
+Before that, 54 of the 57 assertions could not turn `npm test` red: both
+script suites printed a summary and exited 0 regardless, so `&&` chained
+straight through a failure. Only the three in `moves.test.ts` failed the gate.
+
+The same commit also duplicated the summary `console.log` in both files, so
+each suite printed its result twice; `a22f308` removed the duplicates.
+
+**`tsconfig.json` broke the documented build command.** TypeScript will not
+load a config file when files are named on the command line:
+
+```
+error TS5112: tsconfig.json is present but will not be loaded if files are
+specified on commandline.
+```
+
+Resolved with npm scripts, so `npm run check`, `npm test`, and `npm run build`
+mean one thing for everyone rather than each caller assembling flags.
+
+**`tsconfig.json` had no `exclude`, so `tsc` swept the eval fixtures into the
+compilation.** A fixture is a copy of the pre-task source and contains
+deliberately broken code — `evals/01-tuple-types/setup/moves.ts` is the
+`number[][]` version and throws the same six `TS2532` errors the tuple type
+was written to remove. With no `exclude`, every fixture added would have made
+`npm run check` permanently red. Fixed by `"exclude": ["evals", "node_modules"]`.
+
+**Two harness files, with separate jobs.**
+
+`evals/check.ts` is an inspector: it reports what is true and asserts nothing
+about how the repo got that way. Four assertions:
+
+- `npm run check` passes
+- `npm test` passes
+- scope — `git diff --name-only HEAD` contains nothing outside `moves.ts`
+- types honest — `tsconfig.json` still contains
+  `"noUncheckedIndexedAccess": true`
+
+The fourth exists because the task can be satisfied by disabling the flag that
+makes it necessary.
+
+`evals/run.ts` is a conductor: it sequences a run. Refuses without an eval
+name, refuses on a missing directory, refuses on a dirty tree, refuses on an
+empty `task.md`, copies `setup/moves.ts` over `moves.ts`, invokes
+`claude -p` with the task text, runs the checks, and restores `moves.ts` with
+`git checkout --` in a `finally`.
+
+Each of the four assertions was deliberately broken and observed to fail
+before being trusted.
+
+**The dirty-tree guard moved from `check.ts` to `run.ts`** (`7342d87` removed
+it from the inspector; it lives in the conductor). The inspector runs after
+the agent has edited `moves.ts`, so the tree is always dirty at that point —
+it cannot demand a clean tree when the state it exists to examine is the
+dirt.
+
+**First eval ran end to end, manually.** `01-tuple-types`: the fixture was
+staged, the agent rebuilt the tuple fix from the pre-fix source, and its
+output matched the committed version byte-for-byte apart from a trailing
+newline.
+
+**Automated runs are blocked.** `claude -p` is non-interactive, so the Edit
+permission prompt raised inside the run has nobody to answer it. The decision
+taken was to run evals manually rather than pre-authorise unattended write
+access.
+
+**During the blocked run, the main session tried to resume the subagent past
+the permission denial with "don't stop and ask me first."** The subagent did
+not treat that as authorization and refused. The main session then reported
+its own error rather than burying it.
+
+**The eval run polluted git history because `task.md` did not forbid
+committing.** Fixed by adding that line to the task.
+
+**`hello.ts`, `moves.js`, and the four-document command references** are
+unchanged by this entry; see the entry above.

@@ -15,17 +15,18 @@ at the end that demonstrates it.
 
 ## Where we are
 
-**Phase 2 — two agents across a contract boundary.** In progress.
+**Phase 3 — the eval harness.** Substantially complete.
 
-Phase 0 (hand-building) and Phase 1 (one narrow agent) are done. The rule for
-this phase: a second agent owns rendering, the move-logic agent owns rules, and
-neither reads the other's files. The contract between them is the artifact.
+Phases 0 through 2 are done. The harness exists: `evals/check.ts` inspects and
+reports, `evals/run.ts` sequences a run, and `01-tuple-types` has run end to
+end against a pre-task fixture. Four assertions cover both gates, file scope,
+and that `noUncheckedIndexedAccess` is still on. Each was deliberately broken
+and observed to fail before being trusted.
 
-The contract layer exists at `contracts/`, including `board-state.md` — the
-interface between move generation and rendering. Two agents now work across it:
-move-logic owns `moves.ts`, board-render owns `board.html`, and neither reads
-the other's files. The boundary has already stopped one task and forced a
-deliberate contract change rather than a workaround. See `BUILD_LOG.md`, 3 Sep.
+**Runs are manual only.** `claude -p` is non-interactive, so the Edit
+permission prompt raised inside a run has nobody to answer it. The decision
+taken was to run evals by hand rather than pre-authorise unattended write
+access. See `BUILD_LOG.md`, 3 Sep.
 
 ---
 
@@ -96,18 +97,26 @@ Each layer only knows about the one below it. We build bottom-up.
 
 ## Open
 
-1. **Gaps 2, 3, and 4 in `board-state.md`.** Gap 2 is now sharper: `pawnMoves`
+1. **Evals cannot run unattended.** `claude -p` is non-interactive and the Edit
+   permission prompt has nobody to answer it. Running them by hand is the
+   decision, not a workaround pending a fix.
+2. **`test.ts` still counts rather than compares.** `check()` asserts
+   `actual.length === expected`, so a suite of 25 assertions can pass while
+   returning the wrong squares — the knight-offsets bug of 2 Sep passed a count
+   check. `moves.test.ts` compares actual squares; `test.ts` has not been
+   converted.
+3. **Gaps 2, 3, and 4 in `board-state.md`.** Gap 2 is now sharper: `pawnMoves`
    still takes a `color` argument that is redundant twice over, since `Piece`
    carries both colour and type. Gap 3 — a move function called on an empty
    square returns moves for a piece that isn't there — is sidestepped by the
    renderer, not resolved.
-2. **`t1-u01-light-and-dark` teaches that the bottom-right square is always
+4. **`t1-u01-light-and-dark` teaches that the bottom-right square is always
    light.** True on 8×8, false on the 5×5 boards `board-state.md` says tier 1
    uses. The unit's own FEN is 8×8, so nothing is broken today. It will surface
    the first time tier 1 renders on the board it claims to use.
-3. **Clicking a highlighted square does not move the piece.** Highlighting was
+5. **Clicking a highlighted square does not move the piece.** Highlighting was
    the whole ask; moving is the next task.
-4. **`tokens.json` and `bots.json`** are named as contracts in the readme's
+6. **`tokens.json` and `bots.json`** are named as contracts in the readme's
    ownership table but do not exist yet.
 
 ---
@@ -177,11 +186,37 @@ you saw it coming.
 
 ---
 
-## Later phases
+## Phase 3 — the eval harness
 
-**Phase 3 — the eval harness.** Fixed inputs, known-good outputs, run on every
-prompt change. Where tests finally get written. This is the phase that
-separates people who use agents from people who maintain them.
+Substantially complete.
+
+Done:
+- **`evals/check.ts`** — the inspector. Reports what is true: `npm run check`
+  passes, `npm test` passes, nothing outside `moves.ts` was touched, and
+  `noUncheckedIndexedAccess` is still on. That last one exists because the task
+  can be satisfied by disabling the flag that makes it necessary.
+- **`evals/run.ts`** — the conductor. Refuses without an eval name, on a
+  missing directory, on a dirty tree, or on an empty `task.md`; stages the
+  fixture over `moves.ts`, invokes the agent, runs the checks, and restores
+  `moves.ts` in a `finally`.
+- **`01-tuple-types`** — first eval, run end to end by hand. The agent rebuilt
+  the tuple fix from the pre-fix fixture; output matched the committed version
+  byte-for-byte apart from a trailing newline.
+- Each of the four assertions was deliberately broken and observed to fail
+  before being trusted.
+- `moves.test.ts` converted to `node:test`, comparing actual squares.
+- `process.exitCode` added to both script suites, so all 57 assertions can now
+  turn `npm test` red.
+- `"exclude": ["evals", "node_modules"]` in `tsconfig.json`, so fixtures do not
+  enter the compilation.
+
+Not done:
+- Unattended runs. See Open, item 1.
+- `test.ts` still counts rather than compares. See Open, item 2.
+
+---
+
+## Later phases
 
 **Phase 4 — orchestration.** Parallel agents, handoffs, cost and latency,
 where the human approval gates go. The rest of the app gets built here.
