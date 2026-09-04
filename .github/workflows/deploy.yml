@@ -1,0 +1,77 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: read the repo, publish to Pages, and mint the OIDC token
+# that actions/deploy-pages exchanges for a deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. Queue rather than cancel, so a run that has
+# already passed its gates is never dropped part-way through publishing.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Check, test, and assemble
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      # --- Gates. Any non-zero exit fails this job, and the deploy job
+      # --- never runs because it declares `needs: build`.
+      - name: Typecheck
+        run: npm run check
+
+      - name: Test
+        run: npm test
+
+      # --- Compile. Emits game.js and moves.js into the working directory;
+      # --- both are gitignored and never committed.
+      - name: Compile TypeScript
+        run: npm run build
+
+      - name: Assemble dist/
+        run: |
+          mkdir -p dist
+          cp board.html dist/
+          cp board.html dist/index.html
+          cp game.js moves.js dist/
+          ls -l dist
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload dist/ as the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

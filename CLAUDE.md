@@ -4,15 +4,20 @@ A chess learning web app for ages 6–9. TypeScript, no framework yet.
 
 ## Structure
 - `moves.ts` — pure move generation. No UI imports, ever.
+- `game.ts` — game state and turn flow. Applies moves by calling into
+  `moves.ts`; never computes a chess rule itself. No UI imports, ever.
 - `test.ts` — hand-written reference suite.
 - `test-generated.ts` — agent-written suite.
-- `moves.test.ts` — `node:test` suite. The only one that fails the exit code.
-- `board.html` — the rendering layer. Loads the compiled `moves.js`.
+- `moves.test.ts` — `node:test` suite for move generation.
+- `game.test.ts` — `node:test` suite for the game layer.
+- `board.html` — the rendering layer. Imports the compiled `game.js`,
+  which in turn imports `moves.js`.
 - `contracts/` — shared interfaces. Read-only unless explicitly asked.
 
 ## Commands
 - `npm run check` — typecheck. Must exit clean.
-- `npm test` — all three suites.
+- `npm test` — every suite. All of them set a non-zero exit code on
+  failure, so a green `npm test` means every suite passed.
 - `npm run build` — compile `moves.ts` to `moves.js` as ESM, for `board.html`.
 
 ## Rules

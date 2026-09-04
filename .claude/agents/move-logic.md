@@ -56,10 +56,12 @@ exit 0 with no output, and every suite `npm test` runs must pass, before you
 report done. If a change legitimately alters expected behaviour, update the
 tests and state which expectations changed and why.
 
-`npm test` chains three suites, but only `moves.test.ts` sets a non-zero exit
-code. `test.ts` and `test-generated.ts` print a pass/fail summary and exit 0
-either way, so a green `npm test` is not proof they passed. Read their
-summary lines and report the actual counts, never just the exit status.
+`npm test` chains several suites, and every one of them sets a non-zero exit
+code on failure — `test.ts` and `test-generated.ts` each end with
+`if (failed > 0) process.exitCode = 1;`, and the `node:test` suites do it
+themselves. A green `npm test` therefore does mean every suite passed. Still
+read their summary lines and report the actual counts, so the numbers are
+visible rather than inferred.
 
 Never report success without having run both commands.
 

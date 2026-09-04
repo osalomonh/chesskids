@@ -4,3 +4,4 @@ node_modules/
 #   npm run build
 moves.js
 game.js
+dist/
