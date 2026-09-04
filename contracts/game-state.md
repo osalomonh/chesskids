@@ -155,7 +155,7 @@ type MoveResult =
 type MoveRejection =
   | 'empty-square'      // no piece on move.from
   | 'wrong-side'        // that piece belongs to the other player
-  | 'illegal-move'      // not in the list moves.ts returned
+  | 'illegal-move'      // not a legal move for the side to move
   | 'off-board';        // a square isn't on this board
 
 function applyMove(state: GameState, move: Move): MoveResult;
@@ -170,11 +170,26 @@ back. No re-parsing, no reconstructing.
 1. Both squares are on the board.
 2. `move.from` holds a piece.
 3. That piece's colour is `state.sideToMove`.
-4. The move appears in `movesFrom(move.from, state.board)`.
+4. The move appears in `legalMovesFrom(state, move.from)`.
 
-Step 4 is a call into `moves.ts`. This layer does not decide what's legal; it
-asks. If you find yourself writing a knight offset in `game.ts`, you've gone
-wrong.
+Step 4 was a call into `moves.ts` and is now a call into §12. `moves.ts` still
+answers where a piece may go; this layer decides whether that move is allowed
+once the mover's own king is accounted for. If you find yourself writing a
+knight offset in `game.ts`, you've still gone wrong.
+
+`illegal-move` now covers a move that leaves the mover's own king attacked.
+There is deliberately **no new rejection reason** for it. To a renderer
+handling a six-year-old's tap, "that piece can't go there" and "that would
+hang your king" are the same event, and a separate reason only exists to tempt
+the caller into explaining chess. The explanation belongs in the UI copy, not
+the result type.
+
+**One rule, binding.** The legality filter applies a move to a copy of the
+board. It must **not** do that by calling `applyMove`, because `applyMove`
+calls the filter and you get unbounded recursion on the first tap. Factor the
+board transition — move the piece, remove a capture — into one private
+function, and have both `applyMove`'s success path and the filter call that.
+One transition, two callers, no cycle.
 
 **Illegal input returns `{ ok: false }`.** It does not throw, and it does not
 return the state unchanged.
@@ -211,14 +226,57 @@ reaches into `GameState` to compute chess answers by hand.
 ```ts
 function sideToMove(state: GameState): Color;
 function legalMovesFrom(state: GameState, from: Square): Move[];
+function isInCheck(state: GameState): boolean;
+function gameStatus(state: GameState): GameStatus;
 function isRepetitionDraw(state: GameState): boolean;
 function applyMove(state: GameState, move: Move): MoveResult;
 ```
 
 `legalMovesFrom` returns `[]` when the square is empty or holds a piece
 belonging to the side not to move. That's the turn filter, and it lives here
-because turn order lives here. The renderer must not call `movesFrom`
-directly — it has no way to know whose turn it is.
+because turn order lives here. It now also drops any move that would leave the
+mover's own king attacked — see §12.
+
+An empty result therefore no longer means "not your piece". A pinned piece is
+yours, on your turn, with pseudo-legal moves, and correctly offers none.
+Anything reading `[]` as "wrong colour" is now wrong.
+
+The renderer must not call `movesFrom` directly — it has no way to know whose
+turn it is, and now no way to know what's legal either.
+
+`isInCheck` answers one question: is the king of `state.sideToMove` attacked
+right now. Not the other side's king — if you want that, you are asking a
+different question and should say so rather than flipping a field to fake it.
+Returns `false` when that side has no king on the board, which is the normal
+case on the small teaching boards.
+
+`gameStatus` collapses the above into the one value a screen actually needs:
+
+```ts
+type GameStatus =
+  | 'playing'
+  | 'check'
+  | 'checkmate'
+  | 'stalemate'
+  | 'repetition-draw';
+```
+
+First match wins, in this order:
+
+1. no legal moves and `isInCheck` → `checkmate`
+2. no legal moves and not in check → `stalemate`
+3. `isRepetitionDraw` → `repetition-draw`
+4. `isInCheck` → `check`
+5. otherwise → `playing`
+
+Mate outranks repetition because mate ends the game where it stands. A
+position that is checkmate is not a draw that happens to also be mate, and a
+status function that returns `repetition-draw` for a mated king is telling the
+child something false.
+
+"No legal moves" means every piece of the side to move returns `[]` from
+`legalMovesFrom`. Defined that way on purpose: one source of legality, asked
+the same way by everything.
 
 `isRepetitionDraw` counts occurrences of `history[history.length - 1]` — the
 key `applyMove` appended for the current position. It does not recompute the
@@ -233,13 +291,81 @@ Returns `false` on an empty history.
 Reading `state.board` to draw the pieces is fine and expected. Reading
 `state.castling` to decide anything is not.
 
-## 12 What this contract does not do
+## 12 What "legal" means
 
-**No legality beyond pseudo-legal.** `moves.ts` does not detect check. That
-means nothing here can determine checkmate, stalemate, or whether a move
-leaves a king attacked. `applyMove` will happily accept a move that hangs a
-king, because it has no way to know. This contract does not pretend
-otherwise and neither should anything reading it.
+Three conditions, all required:
+
+1. `moves.ts` generated it.
+2. The piece belongs to the side to move.
+3. Playing it does not leave the mover's own king attacked.
+
+The first is geometry and belongs below this layer. The second and third are
+rules about a *game*, and both live here.
+
+**`moves.ts` does not change.** It still generates pseudo-legal moves and
+still knows nothing about check. The filter is built on top of it by calling
+it more often. Nothing is added to `board-state.md` by this amendment.
+
+### The algorithm
+
+For each pseudo-legal move from `movesFrom`: apply it to a copy of the board,
+ask whether the mover's king is attacked in the resulting position, and
+discard the move if it is.
+
+"Is this king attacked" is answered by generating every enemy piece's moves
+and checking whether any lands on the king's square. There is no attack table
+and no per-piece attack function. The move generator already knows what every
+piece can reach; asking it again is one call, and a second implementation of
+the same knowledge is a second thing to keep correct.
+
+**On pawns, which is where this normally breaks.** Using `movesFrom` for
+attack detection would seem wrong for pawns, since a pawn's forward push is a
+move but not an attack. It is fine here, and for a specific reason:
+`pawnMoves` only generates a forward push onto an *empty* square. A king
+occupies the square being tested, so a push can never be generated onto it,
+and only the diagonal captures survive. Do not add a pawn special case to
+"fix" this. It is already right, and the special case would be the bug.
+
+**No king, no check.** A board with no king of the moving colour is not in
+check and filters nothing. The teaching boards in tier 1 have no kings, and
+most of the existing test positions don't either. This is the ordinary case,
+not an edge case to guard against.
+
+### Cost
+
+Every legality query is roughly (pseudo-legal moves) × (enemy pieces) ×
+(their moves). On a 5×5 board with four pieces that is nothing, and on 8×8 it
+is still nothing at one query per tap.
+
+Do not cache it. A cached legal-move set is a second source of truth about the
+position, and this layer already has one rule about that: there is one key per
+position, and there is one answer about legality. Both are computed where
+they're asked for.
+
+### Repetition is unaffected
+
+`PositionKey` does not change. Legality is derived from a position; it is not
+part of a position's identity, and two positions with identical placement,
+side to move, castling rights and en passant target are the same position
+whether or not someone is in check.
+
+### Still out of scope
+
+**Castling, en passant, and promotion remain unimplemented and unpermitted.**
+Check detection does not unlock them. `moves.ts` generates none of the three,
+so none of the three can appear in a legal move list, and §7 stands
+unchanged: storing castling rights and an en passant target is for position
+identity, not permission. If a task requires one of those moves, stop and say
+so.
+
+## 13 What this contract does not do
+
+**No legality beyond this layer.** `moves.ts` still does not detect check, and
+still returns moves that hang a king. That is correct and it stays that way.
+Every legality question above pseudo-legal — your turn, your king — is
+answered here, by §12, and by nothing else. A consumer that wants to know
+whether a move is allowed calls `legalMovesFrom` or reads the result of
+`applyMove`.
 
 **No move generation.** Not one square. Every question about where a piece
 may go is answered by calling into `moves.ts`.
@@ -247,7 +373,7 @@ may go is answered by calling into `moves.ts`.
 **No mutation.** Covered above, repeated here because it's the invariant most
 likely to be broken quietly.
 
-## 13 Variable boards
+## 14 Variable boards
 
 `board.size` is the only source of dimensions. The literal 8 does not appear.
 
@@ -257,7 +383,7 @@ and `null` on the small boards, and nothing has to special-case anything.
 Whether castling is ever *offered* on a non-standard board is a question for
 later. The answer is probably no.
 
-## 14 Depends on
+## 15 Depends on
 
 This contract cannot be implemented until `moves.ts` provides two things it
 does not have today:
@@ -274,7 +400,7 @@ them. Additive, so no expectation in `test.ts` changes.
 Order: amend `board-state.md`, have `move-logic` add `Move` and `movesFrom`,
 then this layer starts.
 
-## 15 Known gaps
+## 16 Known gaps
 
 - **Fifty-move rule.** Not represented. It needs a halfmove clock that resets
   on captures and pawn moves. It isn't here because nothing has needed it,
@@ -284,7 +410,8 @@ then this layer starts.
   square unconditionally. This can under-report threefold repetition in rare
   positions. Accepted, deliberately, and written down so it isn't
   rediscovered as a mystery.
-- **Termination.** Repetition is the only draw this state can see. Checkmate,
-  stalemate, and insufficient material all wait on check detection.
+- **Insufficient material.** Not detected. A bare king against a bare king is
+  a draw and this layer will report `playing` forever. It needs a material
+  scan, not check detection, and nothing has needed it yet.
 - **Castling rights on capture.** Specified in the castling section, not
   implementable until `GameState` records home squares. Unresolved.
