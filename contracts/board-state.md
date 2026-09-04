@@ -22,6 +22,7 @@ type Color     = "white" | "black";
 type PieceType = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
 type Piece     = { square: Square; color: Color; type: PieceType };
 type Board     = { size: number; pieces: Piece[] };
+type Move = { from: Square; to: Square };
 ```
 
 `Board` is a complete description of a position. Nothing else is needed to
@@ -105,12 +106,13 @@ Consumers must not assume the returned squares are in any particular order.
 
 // NEW — entire section. Added 4 Sep 2026 in response to gap 1 below.
 
-## Dispatch and the `Move` type
+## Dispatch
 
 ```ts
-type Move = { from: Square; to: Square };
 
-movesFrom(from: Square, board: Board): Move[]
+movesFrom(board, from): Move[]
+
+
 ```
 
 `movesFrom` reads the piece at `from`, dispatches to the matching function
