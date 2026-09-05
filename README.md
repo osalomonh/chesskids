@@ -16,30 +16,43 @@ they produce.
 - **A game layer.** Turn order, move application, castling and en passant
   memory, and threefold-repetition detection built on a FEN-shaped position
   key.
+- **A full 8×8 game against a bot.** Pick a colour and one of three
+  opponents, then play a complete game: castling, en passant, promotion,
+  check, checkmate, stalemate and draws. The rules come from
+  [chess.js](https://github.com/jhlywa/chess.js) behind a thin wrapper
+  (`standard-game.ts`) so the screen only ever speaks this project's own
+  vocabulary. The bots live in `bots.ts`.
 - **A clickable board.** Tap a piece belonging to the side to move, see its
   legal destinations, tap one, watch the turn flip. Plain HTML and ES modules.
-  No framework, no runtime dependencies, nothing to install to look at it.
-- **135 assertions** across four suites. Every one of them turns `npm test`
-  red on failure.
+  No framework, no build tooling beyond `tsc`.
+- **Six test suites.** Every one of them turns `npm test` red on failure.
 
 ## What doesn't
 
 This is early, and pretending otherwise would defeat the purpose of publishing
 it.
 
-- **No check detection.** None. `applyMove` will happily let you leave your own
-  king hanging, because nothing in the system can see that it's attacked.
-- **No checkmate or stalemate**, which follow from the above.
-- **No castling, en passant, or promotion.** The game layer *remembers*
-  castling rights and en passant targets, because a repetition key is wrong
-  without them. Remembering is not the same as being allowed to act on it, and
-  nothing generates those moves.
+- **The variable-board engine stops at check.** `moves.ts` and `game.ts` are
+  the lesson path for the 5×5 teaching boards. They generate moves for all six
+  pieces, keep turn order, and detect check, checkmate, stalemate and
+  repetition, but they do not generate castling, en passant or promotion.
+  Those live only on the 8×8 path.
 - **No accounts, no saved progress, no curriculum wired in.** The curriculum
   exists as a validated contract — 7 tiers, 32 units — and nothing consumes it
   yet.
 
-The deployed board is a 5×5 position with four pieces. It demonstrates the
-stack; it is not a game you would want to play.
+## Third-party code
+
+The 8×8 rules engine is **chess.js** v1.4.0 by Jeff Hlywa, used under the
+BSD-2-Clause licence. Copyright (c) 2025, Jeff Hlywa (jhlywa@gmail.com). All
+rights reserved. Redistribution and use in source and binary forms, with or
+without modification, are permitted provided that the copyright notice, the
+licence conditions and the disclaimer are retained; the full text ships in
+`node_modules/chess.js/LICENSE` and stays in the header of the vendored bundle
+that `npm run build` copies to `vendor/chess.js` for the browser.
+
+`moves.ts` and `game.ts` are not replaced by it. They remain the engine for
+variable-size lesson boards, where chess.js cannot go.
 
 ## The agent architecture
 
@@ -90,22 +103,26 @@ Each layer knows only about the one below it. Nothing reaches up.
 |---|---|
 | Accounts, saved progress | not started |
 | Curriculum and activities | contract written, nothing consumes it |
-| Rendering (`board.html`) | holds a `GameState`, draws it, turns clicks into moves |
-| Game state (`game.ts`) | turn order, move application, repetition history |
+| Rendering (`board.html`) | holds a `StandardGame`, draws it, turns taps into moves, asks a bot to reply |
+| Bots (`bots.ts`) | three levels over the 8×8 game: random, greedy, two-ply minimax |
+| 8×8 game (`standard-game.ts`) | thin wrapper over chess.js in this project's vocabulary |
+| Game state (`game.ts`) | variable-board lessons: turn order, move application, repetition history |
 | Move generation (`moves.ts`) | six pieces, pure, board-size agnostic |
 
-The renderer never calls `movesFrom` directly — it asks the game layer for
-`legalMovesFrom`, because whose turn it is lives there and not on the board.
-The game layer never computes a chess rule; it asks `moves.ts`. If a knight
-offset ever appears in `game.ts`, something has gone wrong.
+The renderer never calls chess.js directly — it asks `standard-game.ts` for
+`legalMovesFrom` and `applyMove`, and it reads status from `gameStatus`. The
+wrapper is the only file that imports chess.js. On the lesson path the same
+discipline holds one layer down: the renderer asks `game.ts`, `game.ts` asks
+`moves.ts`, and if a knight offset ever appears in `game.ts`, something has
+gone wrong.
 
 ## Running it
 
 ```
 npm install
 npm run check      # typecheck, must exit clean
-npm test           # all four suites
-npm run build      # compile to ESM for the browser
+npm test           # every suite
+npm run build      # compile to ESM for the browser and vendor chess.js
 python -m http.server 8000
 ```
 

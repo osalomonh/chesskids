@@ -5,10 +5,10 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "tsc game.ts --module es2020 --target es2020 --ignoreConfig",
+    "build": "tsc game.ts standard-game.ts bots.ts --module es2020 --target es2020 --ignoreConfig && node scripts/vendor-chessjs.mjs",
     "check": "tsc --noEmit",
-     "serve": "python -m http.server 8000",
-    "test": "tsx --test moves.test.ts game.test.ts && tsx test.ts && tsx test-generated.ts"
+    "serve": "python -m http.server 8000",
+    "test": "tsx --test moves.test.ts game.test.ts standard-game.test.ts bots.test.ts && tsx test.ts && tsx test-generated.ts"
   },
   "keywords": [],
   "author": "",
@@ -17,5 +17,8 @@
     "@types/node": "^26.4.1",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "chess.js": "1.4.0"
   }
 }

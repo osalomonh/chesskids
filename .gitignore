@@ -5,3 +5,9 @@ node_modules/
 moves.js
 game.js
 dist/
+
+# Vendored third-party ESM for the browser. Rebuilt by npm run build
+# from node_modules/chess.js (BSD-2-Clause, see README).
+vendor/
+standard-game.js
+bots.js

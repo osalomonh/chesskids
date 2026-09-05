@@ -1,8 +1,15 @@
 <!--
   Build:
     npm run build
-    (only needed once, or whenever moves.ts/game.ts change; produces
-    moves.js and game.js as ESM)
+    (compiles game.ts, standard-game.ts and bots.ts to ESM and copies the
+    chess.js ESM bundle to vendor/chess.js; re-run it whenever any of those
+    .ts files change)
+
+  The compiled standard-game.js and bots.js contain the bare specifier
+  `import { Chess } from "chess.js"`, which a browser cannot resolve on its
+  own. The <script type="importmap"> below maps it to ./vendor/chess.js and
+  must come before the module script. This page itself never imports
+  chess.js: it imports ./standard-game.js and ./bots.js only.
 
   Serve (ES modules do not load over file://):
     python -m http.server 8000
@@ -16,163 +23,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chess</title>
-<style>
-  /* Minimal, structural only. Visual design belongs to the design layer;
-     these rules exist so the page is legible and the touch targets are big
-     enough. Class hooks a stylesheet will want are named below. */
-
-  html, body {
-    height: 100%;
-    margin: 0;
-    background: #2b2b2b;
-    font-family: sans-serif;
-    color: #eee;
-  }
-
-  body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: auto;
-  }
-
-  /* --- screens ---------------------------------------------------------- */
-
-  .screen {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-  }
-
-  .screen[hidden] {
-    display: none;
-  }
-
-  /* --- setup screen ----------------------------------------------------- */
-
-  .setup-prompt {
-    font-size: 22px;
-    margin-bottom: 16px;
-  }
-
-  .color-choice {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-  }
-
-  .color-option {
-    min-width: 100px;
-    min-height: 60px;
-    font-size: 18px;
-    font-family: inherit;
-    border: 3px solid #1a1a1a;
-    border-radius: 8px;
-    background: #f0d9b5;
-    color: #1a1a1a;
-    cursor: pointer;
-  }
-
-  .color-option[aria-pressed="true"] {
-    outline: 4px solid #2e9bff;
-    outline-offset: -4px;
-  }
-
-  .play-button {
-    min-width: 180px;
-    min-height: 60px;
-    font-size: 22px;
-    font-family: inherit;
-    border: 3px solid #1a1a1a;
-    border-radius: 8px;
-    background: #6fc36f;
-    color: #1a1a1a;
-    cursor: pointer;
-  }
-
-  /* --- game screen ------------------------------------------------------ */
-
-  /* Off the board, not on it: the status line lives here, not in a square. */
-  .status-line {
-    margin-bottom: 12px;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 18px;
-    color: #eee;
-    background: #1a1a1a;
-    text-align: center;
-  }
-
-  .board {
-    display: grid;
-    border: 4px solid #1a1a1a;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  }
-
-  .square {
-    width: 72px;
-    height: 72px;
-    min-width: 60px;
-    min-height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    user-select: none;
-    cursor: pointer;
-  }
-
-  .square.light {
-    background: #f0d9b5;
-  }
-
-  .square.dark {
-    background: #b58863;
-  }
-
-  .square.selected {
-    outline: 4px solid #2e9bff;
-    outline-offset: -4px;
-  }
-
-  .square.highlight::after {
-    content: "";
-    position: absolute;
-    width: 30%;
-    height: 30%;
-    border-radius: 50%;
-    background: rgba(30, 130, 30, 0.65);
-  }
-
-  /* When the highlighted square is occupied (a capture), show a ring
-     instead of a dot, so the destination is still visible under the piece. */
-  .square.highlight.occupied::after {
-    width: 82%;
-    height: 82%;
-    background: transparent;
-    border: 6px solid rgba(200, 30, 30, 0.65);
-    box-sizing: border-box;
-  }
-
-  .piece {
-    font-size: 48px;
-    line-height: 1;
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  .piece.white {
-    color: #fefefe;
-    text-shadow: 0 0 2px #000, 0 0 2px #000;
-  }
-
-  .piece.black {
-    color: #111;
-  }
-</style>
+<link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
@@ -186,107 +37,196 @@
     <button class="color-option" type="button" data-choice="random" aria-pressed="false">Surprise me</button>
   </div>
 
+  <p class="setup-prompt">Who do you want to play against?</p>
+
+  <!-- Each button carries the bot level in data-level. The names are for the
+       child; the levels are what bots.js understands. -->
+  <div class="level-choice" id="level-choice" role="group" aria-label="Choose an opponent">
+    <button class="color-option level-option" type="button" data-level="random" aria-pressed="true">
+      <span class="level-name">Sleepy</span>
+      <span class="level-blurb">Moves without looking</span>
+    </button>
+    <button class="color-option level-option" type="button" data-level="greedy" aria-pressed="false">
+      <span class="level-name">Hungry</span>
+      <span class="level-blurb">Grabs any piece it can</span>
+    </button>
+    <button class="color-option level-option" type="button" data-level="thinking" aria-pressed="false">
+      <span class="level-name">Clever</span>
+      <span class="level-blurb">Looks one move ahead</span>
+    </button>
+  </div>
+
   <button class="play-button" type="button" id="play-button">Play</button>
 </section>
 
 <!-- SCREEN 2: game -->
 <section class="screen game-screen" id="game-screen" hidden>
-  <div class="status-line" id="status-line"></div>
+  <div class="status-line" id="status-line" aria-live="polite"></div>
   <div class="board" id="board"></div>
+
+  <div class="game-actions">
+    <button class="play-button play-again-button" type="button" id="play-again-button" hidden>Play again</button>
+    <button class="new-game-button" type="button" id="new-game-button">New game</button>
+  </div>
+
+  <!-- Promotion prompt. In-page only: no window.prompt, no alert, no confirm.
+       The piece artwork is sized by styles.css (.promotion-option .piece sets
+       its own width and height from the touch token), so no inline --square
+       is needed here. -->
+  <div class="promotion-layer" id="promotion-layer" hidden>
+    <div class="promotion-backdrop" id="promotion-backdrop"></div>
+    <div class="promotion-panel" role="dialog" aria-modal="true" aria-label="Choose a piece">
+      <p class="promotion-prompt">Your pawn reached the end. Pick a piece.</p>
+      <div class="promotion-choices" id="promotion-choices"></div>
+      <button class="promotion-cancel" type="button" id="promotion-cancel">Back</button>
+    </div>
+  </div>
 </section>
 
+<script type="importmap">
+{ "imports": { "chess.js": "./vendor/chess.js" } }
+</script>
+
 <script type="module">
-  import { applyMove, legalMovesFrom, sideToMove, gameStatus } from "./game.js";
+  // The rules live behind standard-game.js; the opponent lives behind bots.js.
+  // Nothing on this page works out where a piece may move: every such question
+  // is legalMovesFrom / applyMove / gameStatus.
+  import {
+    applyMove,
+    gameStatus,
+    isGameOver,
+    lastMove,
+    legalMovesFrom,
+    newGame,
+    sideToMove
+  } from "./standard-game.js";
+  import { chooseMove } from "./bots.js";
 
   // ======================================================================
-  // Starting position — DATA. The 8 below describes this one position; the
-  // drawing code further down reads board.size and never assumes a number.
+  // Screen data. Names and blurbs are this layer's; `level` is what bots.js
+  // takes. Nothing here is written into the game.
   // ======================================================================
 
-  const STANDARD_SIZE = 8;
-
-  // Files 0..7 of a back rank: rook, knight, bishop, queen, king, bishop,
-  // knight, rook. Queen on file 3, king on file 4.
-  const BACK_RANK = [
-    "rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"
+  const BOTS = [
+    { level: "random",   name: "Sleepy" },
+    { level: "greedy",   name: "Hungry" },
+    { level: "thinking", name: "Clever" }
   ];
 
-  function standardStartingBoard() {
-    const pieces = [];
+  // How long the bot appears to think, so the child sees their own move land
+  // before the reply.
+  const BOT_DELAY_MS = 500;
 
-    for (let file = 0; file < STANDARD_SIZE; file++) {
-      // rank 0 = white's back rank, rank 7 = black's back rank, per
-      // contracts/board-state.md ({file:0, rank:0} is white's bottom-left).
-      pieces.push({ square: { file, rank: 0 }, color: "white", type: BACK_RANK[file] });
-      pieces.push({ square: { file, rank: 1 }, color: "white", type: "pawn" });
-      pieces.push({ square: { file, rank: STANDARD_SIZE - 2 }, color: "black", type: "pawn" });
-      pieces.push({ square: { file, rank: STANDARD_SIZE - 1 }, color: "black", type: BACK_RANK[file] });
-    }
+  const PROMOTION_ORDER = ["queen", "rook", "bishop", "knight"];
 
-    return { size: STANDARD_SIZE, pieces };
-  }
+  const PIECE_NAMES = {
+    queen: "Queen",
+    rook: "Rook",
+    bishop: "Bishop",
+    knight: "Knight"
+  };
 
-  // A fresh GameState. Castling rights start true because on this board every
-  // king and rook is on its home square; game-state.md §7 requires them to be
-  // maintained correctly for position identity even though moves.ts never
-  // generates a castling move. applyMove narrows them; nothing here sets one
-  // back to true. history starts empty — applyMove appends one key per move.
-  function newGame() {
-    return {
-      board: standardStartingBoard(),
-      sideToMove: "white",
-      castling: {
-        whiteKingside: true,
-        whiteQueenside: true,
-        blackKingside: true,
-        blackQueenside: true
-      },
-      enPassantTarget: null,
-      history: []
-    };
-  }
-
-  // ======================================================================
-  // Game state (owned by game.js) and screen state (owned by this file).
-  // ======================================================================
-
-  let state = null;            // GameState | null — only set once Play is pressed
-
-  // --- Screen state. None of this is ever written into GameState or Board. ---
-  let colorChoice = "white";   // "white" | "black" | "random" — the setup pick
-  let playingAs = null;        // "white" | "black" — resolved when Play is pressed
-  let selectedSquare = null;   // Square | null
-  let selectedMoves = [];      // Move[] — exactly what legalMovesFrom returned
-
+  // Kept in the DOM for assistive tech; styles.css paints the artwork over it
+  // and makes the glyph itself transparent.
   const GLYPHS = {
     white: { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" },
     black: { king: "♚", queen: "♛", rook: "♜", bishop: "♝", knight: "♞", pawn: "♟" }
   };
 
-  function pieceAt(square) {
-    return state.board.pieces.find(
-      p => p.square.file === square.file && p.square.rank === square.rank
-    );
-  }
+  // ======================================================================
+  // State. `game` is the value standard-game.js hands back; everything else
+  // is screen state and lives only here.
+  // ======================================================================
 
-  function squareEquals(a, b) {
+  let game = null;             // StandardGame | null — set when Play is pressed
+
+  let colorChoice = "white";   // "white" | "black" | "random" — the setup pick
+  let levelChoice = "random";  // a bot level — the setup pick
+  let playingAs = null;        // "white" | "black" — resolved when Play is pressed
+  let botLevel = "random";     // the level this game is being played at
+  let botName = "Sleepy";      // what the status line calls the opponent
+
+  let selectedSquare = null;   // Square | null
+  let selectedMoves = [];      // StandardMove[] — exactly what legalMovesFrom returned
+  let pendingPromotion = null; // { moves: StandardMove[], color } | null
+
+  let botTimer = null;         // setTimeout handle
+  let botThinking = false;     // board taps are ignored while this is true
+  let gameToken = 0;           // bumped on every new game; a timer from an old
+                               // game sees a stale token and does nothing
+
+  // ======================================================================
+  // Small helpers. Reading game.board to draw is what it is for; no rule is
+  // computed from it.
+  // ======================================================================
+
+  function sameSquare(a, b) {
     return a.file === b.file && a.rank === b.rank;
   }
 
+  function squareKey(square) {
+    return `${square.file},${square.rank}`;
+  }
+
+  function piecesBySquare(board) {
+    const map = new Map();
+    for (const piece of board.pieces) map.set(squareKey(piece.square), piece);
+    return map;
+  }
+
+  function botNameFor(level) {
+    const entry = BOTS.find(bot => bot.level === level);
+    return entry === undefined ? "your opponent" : entry.name;
+  }
+
+  function clearSelection() {
+    selectedSquare = null;
+    selectedMoves = [];
+  }
+
+  function closePromotion() {
+    pendingPromotion = null;
+  }
+
+  function stopBot() {
+    if (botTimer !== null) clearTimeout(botTimer);
+    botTimer = null;
+    botThinking = false;
+  }
+
   // ======================================================================
-  // Setup screen
+  // Elements
   // ======================================================================
 
   const setupScreenEl = document.getElementById("setup-screen");
   const gameScreenEl = document.getElementById("game-screen");
   const colorChoiceEl = document.getElementById("color-choice");
+  const levelChoiceEl = document.getElementById("level-choice");
   const playButtonEl = document.getElementById("play-button");
+  const statusLineEl = document.getElementById("status-line");
+  const boardEl = document.getElementById("board");
+  const playAgainEl = document.getElementById("play-again-button");
+  const newGameEl = document.getElementById("new-game-button");
+  const promotionLayerEl = document.getElementById("promotion-layer");
+  const promotionChoicesEl = document.getElementById("promotion-choices");
+  const promotionCancelEl = document.getElementById("promotion-cancel");
+  const promotionBackdropEl = document.getElementById("promotion-backdrop");
 
-  function renderColorChoice() {
+  // ======================================================================
+  // Setup screen
+  // ======================================================================
+
+  function renderSetup() {
     for (const button of colorChoiceEl.querySelectorAll(".color-option")) {
       button.setAttribute(
         "aria-pressed",
         button.dataset.choice === colorChoice ? "true" : "false"
+      );
+    }
+    for (const button of levelChoiceEl.querySelectorAll(".level-option")) {
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset.level === levelChoice ? "true" : "false"
       );
     }
   }
@@ -294,109 +234,274 @@
   colorChoiceEl.addEventListener("click", event => {
     const button = event.target.closest(".color-option");
     if (!button) return;
-
     colorChoice = button.dataset.choice;
-    renderColorChoice();
+    renderSetup();
   });
 
-  playButtonEl.addEventListener("click", () => {
-    // "Random" resolves here, at the moment Play is pressed. The resolved
-    // colour is screen state: it decides draw order and nothing else.
+  levelChoiceEl.addEventListener("click", event => {
+    const button = event.target.closest(".level-option");
+    if (!button) return;
+    levelChoice = button.dataset.level;
+    renderSetup();
+  });
+
+  playButtonEl.addEventListener("click", startGame);
+
+  // Back to setup with the previous picks still selected — they are module
+  // state and nothing resets them.
+  function showSetup() {
+    stopBot();
+    gameToken += 1;
+    game = null;
+    clearSelection();
+    closePromotion();
+    promotionLayerEl.hidden = true;
+    gameScreenEl.hidden = true;
+    setupScreenEl.hidden = false;
+    renderSetup();
+    playButtonEl.focus();
+  }
+
+  playAgainEl.addEventListener("click", showSetup);
+  newGameEl.addEventListener("click", showSetup);
+
+  // ======================================================================
+  // Starting and running a game
+  // ======================================================================
+
+  function startGame() {
+    // "Surprise me" resolves here, once. The resolved colour decides draw
+    // order and which side the child taps for; it is never stored in the game.
     playingAs = colorChoice === "random"
       ? (Math.random() < 0.5 ? "white" : "black")
       : colorChoice;
 
-    state = newGame();
-    selectedSquare = null;
-    selectedMoves = [];
+    botLevel = levelChoice;
+    botName = botNameFor(botLevel);
+
+    stopBot();
+    gameToken += 1;
+    game = newGame();
+    clearSelection();
+    closePromotion();
 
     setupScreenEl.hidden = true;
     gameScreenEl.hidden = false;
 
     render();
-  });
+    // If the child chose black, white — the bot — opens.
+    maybeStartBot();
+  }
 
-  // ======================================================================
-  // Game screen
-  // ======================================================================
+  function maybeStartBot() {
+    if (game === null) return;
+    if (isGameOver(game)) return;
+    if (sideToMove(game) === playingAs) return;
+    scheduleBot();
+  }
 
-  function handleSquareClick(square) {
-    if (selectedSquare && squareEquals(selectedSquare, square)) {
-      // Tapping the selected piece again deselects.
-      selectedSquare = null;
-      selectedMoves = [];
-      render();
-      return;
-    }
+  function scheduleBot() {
+    botThinking = true;
+    const token = gameToken;
 
-    if (selectedSquare) {
-      // Is this square one of the legal destinations for the selection?
-      // Pass back the SAME Move object legalMovesFrom returned — never a
-      // reconstructed { from, to } pair.
-      const move = selectedMoves.find(m => squareEquals(m.to, square));
+    botTimer = setTimeout(() => {
+      botTimer = null;
+      // A "New game" or "Play again" happened while this was pending. The
+      // game it was going to move in no longer exists.
+      if (token !== gameToken) return;
 
-      if (move) {
-        const result = applyMove(state, move);
+      botThinking = false;
 
-        selectedSquare = null;
-        selectedMoves = [];
-
-        if (result.ok) {
-          state = result.state;
-        }
-        // On rejection: selection is already cleared above, nothing else
-        // happens. No alert, no error text.
-
-        render();
-        return;
+      const move = chooseMove(game, botLevel);
+      if (move !== null && move !== undefined) {
+        const result = applyMove(game, move);
+        if (result.ok) game = result.game;
       }
-    }
+      render();
+    }, BOT_DELAY_MS);
 
-    // Not completing a move: try starting a new selection. legalMovesFrom
-    // itself returns [] for an empty square, for a piece belonging to the
-    // side not to move, and for a piece with no move that keeps its own king
-    // safe — so no turn check and no rules reasoning happens here.
-    const moves = legalMovesFrom(state, square);
+    render();
+  }
 
-    if (moves.length > 0) {
-      selectedSquare = square;
-      selectedMoves = moves;
-    } else {
-      selectedSquare = null;
-      selectedMoves = [];
+  // The one place a move is applied, for the child's taps and the bot's alike.
+  function playMove(move) {
+    const result = applyMove(game, move);
+
+    clearSelection();
+    closePromotion();
+
+    // On rejection nothing happens beyond clearing the selection: no alert,
+    // no error text.
+    if (result.ok) {
+      game = result.game;
+      render();
+      maybeStartBot();
+      return;
     }
 
     render();
   }
 
-  // Whose turn it is plus the outcome, in words a 6-year-old can read.
-  // Everything here comes from gameStatus/sideToMove; nothing is worked out
-  // on this side of the boundary.
-  function statusText() {
-    const turn = sideToMove(state);
-    const mover = turn === "white" ? "White" : "Black";
-    const other = turn === "white" ? "Black" : "White";
+  // ======================================================================
+  // Taps on the board
+  // ======================================================================
 
-    switch (gameStatus(state)) {
-      case "checkmate":
-        return `Checkmate! ${other} wins the game.`;
-      case "stalemate":
-        return `${mover} has no moves left. It's a tie!`;
-      case "repetition-draw":
-        return "The same position came up three times. It's a tie!";
-      case "check":
-        return `${mover}'s turn. Look out — your king is in check!`;
-      default:
-        return `${mover}'s turn.`;
+  function handleSquareClick(square) {
+    if (game === null) return;
+
+    // A tap anywhere else while the promotion prompt is open cancels it.
+    if (pendingPromotion !== null) {
+      closePromotion();
+      clearSelection();
+      render();
+      return;
+    }
+
+    if (botThinking) return;
+    if (isGameOver(game)) return;
+    // Not a chess rule: the child taps for their own colour only, and the
+    // other colour is the bot's.
+    if (sideToMove(game) !== playingAs) return;
+
+    if (selectedSquare !== null && sameSquare(selectedSquare, square)) {
+      clearSelection();
+      render();
+      return;
+    }
+
+    if (selectedSquare !== null) {
+      // Every move the selection has to this square. Promotion gives four
+      // (one per piece); everything else gives one.
+      const toHere = selectedMoves.filter(move => sameSquare(move.to, square));
+
+      if (toHere.length > 1) {
+        pendingPromotion = { moves: toHere, color: sideToMove(game) };
+        render();
+        return;
+      }
+
+      if (toHere.length === 1) {
+        // The same move object legalMovesFrom returned — never a rebuilt pair.
+        playMove(toHere[0]);
+        return;
+      }
+    }
+
+    // Not completing a move, so try to select. legalMovesFrom already returns
+    // [] for an empty square, the other side's piece, and a finished game, so
+    // there is no rules reasoning here.
+    const moves = legalMovesFrom(game, square);
+    if (moves.length > 0) {
+      selectedSquare = square;
+      selectedMoves = moves;
+    } else {
+      clearSelection();
+    }
+    render();
+  }
+
+  // ======================================================================
+  // Promotion prompt
+  // ======================================================================
+
+  function cancelPromotion() {
+    if (pendingPromotion === null) return;
+    closePromotion();
+    clearSelection();
+    render();
+  }
+
+  promotionCancelEl.addEventListener("click", cancelPromotion);
+  promotionBackdropEl.addEventListener("click", cancelPromotion);
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") cancelPromotion();
+  });
+
+  function renderPromotion() {
+    if (pendingPromotion === null) {
+      promotionChoicesEl.replaceChildren();
+      promotionLayerEl.hidden = true;
+      return;
+    }
+
+    const wasHidden = promotionLayerEl.hidden;
+    promotionChoicesEl.replaceChildren();
+
+    for (const type of PROMOTION_ORDER) {
+      const move = pendingPromotion.moves.find(entry => entry.promotion === type);
+      if (move === undefined) continue;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "color-option promotion-option";
+
+      const glyph = document.createElement("span");
+      glyph.className = `piece ${pendingPromotion.color} ${type}`;
+      glyph.textContent = GLYPHS[pendingPromotion.color][type];
+
+      const label = document.createElement("span");
+      label.className = "promotion-name";
+      label.textContent = PIECE_NAMES[type];
+
+      button.append(glyph, label);
+      button.addEventListener("click", () => playMove(move));
+      promotionChoicesEl.appendChild(button);
+    }
+
+    promotionLayerEl.hidden = false;
+
+    if (wasHidden) {
+      const first = promotionChoicesEl.querySelector("button");
+      if (first !== null) first.focus();
     }
   }
 
-  // Draw order. Board state is always described from white's perspective, so
-  // rank 0 is white's home rank in the data no matter who is looking. For a
-  // white player the highest rank is drawn at the top; for a black player the
-  // whole board is turned around — ranks bottom-to-top and files right-to-
-  // left. The coordinates themselves are never touched: a {file, rank} pair
-  // means the same square either way.
+  // ======================================================================
+  // Status line. Everything comes from gameStatus / sideToMove; nothing is
+  // worked out on this side of the boundary.
+  // ======================================================================
+
+  function statusText() {
+    const turn = sideToMove(game);
+    const yourTurn = turn === playingAs;
+
+    switch (gameStatus(game)) {
+      case "checkmate":
+        // The side to move is the one with no way out.
+        return yourTurn
+          ? `Checkmate. ${botName} wins.`
+          : "Checkmate! You win!";
+      case "stalemate":
+        return "It's a tie — there are no moves left to make.";
+      case "repetition-draw":
+        return "It's a tie — the same position came up three times.";
+      case "insufficient-material":
+        return "It's a tie — there are not enough pieces left to win.";
+      case "fifty-move-draw":
+        return "It's a tie — fifty turns went by with nothing taken.";
+      case "check":
+        return yourTurn
+          ? "Your king is in check. Move it somewhere safe."
+          : `${botName} is in check. ${botName} is thinking.`;
+      default:
+        return yourTurn ? "Your turn." : `${botName} is thinking.`;
+    }
+  }
+
+  // ======================================================================
+  // Drawing
+  //
+  // Board state is always described from white's perspective, so rank 0 is
+  // white's home rank in the data no matter who is looking. For a white
+  // player the highest rank is drawn at the top. For a black player the whole
+  // board is turned around: a 180-degree rotation, so BOTH orders reverse —
+  // ranks bottom-to-top and files right-to-left. Reversing ranks alone would
+  // be a mirror and would put black's king and queen on the wrong sides. The
+  // coordinates themselves are never touched: a {file, rank} pair means the
+  // same square in either view.
+  // ======================================================================
+
   function ranksTopToBottom(size) {
     const ranks = [];
     for (let rank = 0; rank < size; rank++) ranks.push(rank);
@@ -410,39 +515,55 @@
   }
 
   function render() {
-    const board = state.board;
+    if (game === null) return;
 
-    document.getElementById("status-line").textContent = statusText();
+    const board = game.board;
+    const pieces = piecesBySquare(board);
+    const previous = lastMove(game);
+    const finished = isGameOver(game);
 
-    const boardEl = document.getElementById("board");
-    boardEl.innerHTML = "";
-    boardEl.style.gridTemplateColumns = `repeat(${board.size}, 72px)`;
-    boardEl.style.gridTemplateRows = `repeat(${board.size}, 72px)`;
+    statusLineEl.textContent = statusText();
+    playAgainEl.hidden = !finished;
+    boardEl.classList.toggle("bot-thinking", botThinking);
+
+    // One highlight per destination, even when four promotion moves share it.
+    const destinations = new Set(selectedMoves.map(move => squareKey(move.to)));
+
+    boardEl.replaceChildren();
+    boardEl.style.setProperty("--board-size", board.size);
 
     for (const rank of ranksTopToBottom(board.size)) {
       for (const file of filesLeftToRight(board.size)) {
         const square = { file, rank };
+        const key = squareKey(square);
         const squareEl = document.createElement("div");
+
+        // Square colour comes from the canonical file + rank, so the same
+        // corner stays light in both views.
         const isLight = (file + rank) % 2 === 1;
         squareEl.className = `square ${isLight ? "light" : "dark"}`;
 
-        const piece = pieceAt(square);
+        const piece = pieces.get(key);
 
-        if (selectedSquare && squareEquals(selectedSquare, square)) {
+        if (selectedSquare !== null && sameSquare(selectedSquare, square)) {
           squareEl.classList.add("selected");
         }
 
-        const isHighlighted = selectedMoves.some(m => squareEquals(m.to, square));
-        if (isHighlighted) {
-          squareEl.classList.add("highlight");
-          if (piece) {
-            squareEl.classList.add("occupied");
-          }
+        if (previous !== null &&
+            (sameSquare(previous.from, square) || sameSquare(previous.to, square))) {
+          squareEl.classList.add("last-move");
         }
 
-        if (piece) {
+        if (destinations.has(key)) {
+          squareEl.classList.add("highlight");
+          // A ring when something is standing there, a dot when not. An en
+          // passant capture lands on an empty square, so it gets the dot.
+          if (piece !== undefined) squareEl.classList.add("occupied");
+        }
+
+        if (piece !== undefined) {
           const pieceEl = document.createElement("span");
-          pieceEl.className = `piece ${piece.color}`;
+          pieceEl.className = `piece ${piece.color} ${piece.type}`;
           pieceEl.textContent = GLYPHS[piece.color][piece.type];
           squareEl.appendChild(pieceEl);
         }
@@ -451,9 +572,11 @@
         boardEl.appendChild(squareEl);
       }
     }
+
+    renderPromotion();
   }
 
-  renderColorChoice();
+  renderSetup();
 </script>
 </body>
 </html>
