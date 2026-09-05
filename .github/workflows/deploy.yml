@@ -43,8 +43,9 @@ jobs:
       - name: Test
         run: npm test
 
-      # --- Compile. Emits game.js and moves.js into the working directory;
-      # --- both are gitignored and never committed.
+      # --- Compile. Emits game.js, moves.js, standard-game.js and bots.js into
+      # --- the working directory and vendors chess.js into vendor/;
+      # --- all of them are gitignored and never committed.
       - name: Compile TypeScript
         run: npm run build
 
@@ -53,8 +54,15 @@ jobs:
           mkdir -p dist
           cp board.html dist/
           cp board.html dist/index.html
-          cp game.js moves.js dist/
-          ls -l dist
+          cp game.js moves.js standard-game.js bots.js dist/
+          # The chess.js ESM bundle, vendored by npm run build and resolved by
+          # the import map in board.html.
+          cp -r vendor dist/
+          cp styles.css dist/
+          # Static assets (self-hosted fonts, artwork). Optional today, so
+          # the copy is skipped rather than failed when the directory is absent.
+          if [ -d assets ]; then cp -r assets dist/; fi
+          ls -lR dist
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

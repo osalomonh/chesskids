@@ -1,0 +1,764 @@
+/* ==========================================================================
+   chesskids -- visual layer.
+
+   Every colour, size, radius, duration and font below comes from
+   contracts/design-tokens.json. Nothing in this file changes behaviour:
+   no rule adds, removes or retargets an interactive element.
+
+   Self-hosted fonts only. No @import, no external URL, no tracker.
+   ========================================================================== */
+
+@font-face {
+  font-family: "Baloo 2";
+  /* Variable file: one face covers the 600 / 700 the tokens ask for.
+     Licence: assets/fonts/Baloo2-OFL.txt */
+  src: url("./assets/fonts/Baloo2-Variable.ttf") format("truetype-variations"),
+       url("./assets/fonts/Baloo2-Variable.ttf") format("truetype");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Lexend";
+  /* Variable file: one face covers the 400 / 500 / 600 the tokens ask for. */
+  src: url("./assets/fonts/Lexend-Variable.ttf") format("truetype-variations"),
+       url("./assets/fonts/Lexend-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --------------------------------------------------------------------------
+   Tokens
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* colour */
+  --sand: #F6EDDD;
+  --heeler: #3D6E9E;
+  --sky: #A8D4E6;
+  --mango: #F2A93B;
+  --mint: #7FC4A0;
+  --coral: #E4574B;
+  --ink: #2E3A44;
+  --board-light: #F3E4C8;
+  --board-dark: #7FA9C4;
+
+  /* type */
+  --font-body: "Lexend", system-ui, sans-serif;
+  --font-display: "Baloo 2", "Fredoka", system-ui, sans-serif;
+
+  --text-xs: 0.875rem;   /* not used for anything a child reads */
+  --text-sm: 1rem;       /* the floor for body copy */
+  --text-md: 1.125rem;
+  --text-lg: 1.5rem;
+  --text-xl: 2rem;
+  --text-display: 2.75rem;
+
+  --lh-tight: 1.2;
+  --lh-normal: 1.5;
+
+  /* space */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
+  --radius-pill: 999px;
+
+  /* touch */
+  --touch-min: 64px;
+  --touch-gap: 12px;
+
+  /* motion */
+  --t-selection: 120ms;
+  --t-piece: 180ms;
+  --t-celebration: 600ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* board */
+  --square-max: 64px;   /* board.minSquare, and the largest we draw */
+
+  /* --board-size is set on .board by render(). Deliberately no fallback here:
+     board size is data, and this file must not name one. */
+}
+
+/* --------------------------------------------------------------------------
+   Page
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* The render layer hides screens, the promotion layer and the "Play again"
+   button with the `hidden` attribute. Several of those elements are given
+   display:flex / display:grid below, which would otherwise beat the user-agent
+   [hidden] rule. This one line keeps `hidden` authoritative everywhere. */
+[hidden] {
+  display: none !important;
+}
+
+html {
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--sand);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: var(--lh-normal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Centring is done with the screen's auto margins, not justify-content:
+     a centred flex item cannot be scrolled back to when it overflows. */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);          /* 24px, comfortably over the 12px gap floor */
+  width: 100%;
+  max-width: 100%;
+  margin-block: auto;           /* centres vertically, and still scrolls */
+}
+
+/* --------------------------------------------------------------------------
+   Setup screen
+   -------------------------------------------------------------------------- */
+
+/* Two questions, one after the other. They are told apart by the space around
+   them and by the size of the question itself -- not by boxing each one into a
+   card. 14 x the touch floor keeps the pair of questions to a readable measure
+   on a wide screen instead of letting them sprawl. */
+.setup-screen {
+  max-width: calc(var(--touch-min) * 14);   /* 896px */
+}
+
+.setup-prompt {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  text-align: center;
+  text-wrap: balance;
+  max-width: 20ch;
+}
+
+/* Double space before the second question, single space inside each one, so
+   the screen reads as two questions rather than six loose buttons. */
+.color-choice + .setup-prompt {
+  margin-top: var(--space-6);   /* 24px + the screen's own 24px gap = 48px */
+}
+
+.level-choice + .play-button {
+  margin-top: var(--space-4);   /* 16px + 24px = 40px; the action, set apart */
+}
+
+.color-choice,
+.level-choice {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-6);          /* 24px: twice the 12px floor, per §6 */
+  width: 100%;
+}
+
+/* Each opponent is a name and one short line about them, stacked. The basis is
+   wide enough that all three sit in a row on a tablet and one per row on a
+   phone, with no breakpoint doing the deciding. */
+.level-option {
+  flex: 1 1 calc(var(--touch-min) * 3.5);   /* 224px */
+  max-width: calc(var(--touch-min) * 4.5);  /* 288px */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  text-align: center;
+  /* Padding, border, radius, fill and the 64px floor all come from
+     .color-option, which this button also carries. */
+}
+
+.level-name {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+}
+
+/* 1rem is the token floor for body copy. This line does not go below it. */
+.level-blurb {
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: var(--lh-tight);
+  text-wrap: balance;
+}
+
+.color-option,
+.play-button {
+  min-height: var(--touch-min);
+  font-family: var(--font-body);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--t-selection) var(--ease),
+    box-shadow var(--t-selection) var(--ease),
+    transform var(--t-selection) var(--ease);
+}
+
+.color-option {
+  min-width: var(--touch-min);
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--sand);
+  border: var(--space-1) solid var(--ink);
+  border-radius: var(--radius-lg);
+}
+
+/* Selected. Three cues, only one of which is colour: a second ring, so the
+   edge reads twice as thick; a heavier label; a filled panel. */
+.color-option[aria-pressed="true"] {
+  background: var(--sky);
+  font-weight: 600;
+  box-shadow: 0 0 0 var(--space-1) var(--heeler);
+}
+
+.play-button {
+  padding: var(--space-3) var(--space-12);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--sand);            /* sand on heeler: 4.61:1, AA at 1.5rem/700 */
+  background: var(--heeler);
+  border: var(--space-1) solid var(--ink);
+  border-radius: var(--radius-pill);
+}
+
+/* The quiet second button: "New game" beside the board, "Back" in the
+   promotion sheet. Unmistakably a button -- a pill with a hard ink edge and a
+   64px target -- but it is drawn in the page's own colour and a thinner line
+   than anything on the board, so the board stays the loudest thing on screen.
+   The 2px edge is half of --space-1; the file already derives that width for
+   the affordance outlines. */
+.new-game-button,
+.promotion-cancel {
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  padding: var(--space-3) var(--space-6);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--ink);             /* ink on sand: 9.4:1 */
+  background: transparent;       /* the sand of the page / of the sheet */
+  border: calc(var(--space-1) / 2) solid var(--ink);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--t-selection) var(--ease),
+    transform var(--t-selection) var(--ease);
+}
+
+@media (hover: hover) {
+  .color-option:hover {
+    background: var(--board-light);
+  }
+
+  .color-option[aria-pressed="true"]:hover {
+    background: var(--sky);
+  }
+
+  .new-game-button:hover,
+  .promotion-cancel:hover {
+    background: var(--board-light);
+  }
+}
+
+.color-option:active,
+.play-button:active,
+.new-game-button:active,
+.promotion-cancel:active {
+  transform: scale(0.97);
+}
+
+/* Keyboard focus. Always visible, always heeler, always outside the control,
+   so it survives whatever fill the control happens to have. */
+button:focus-visible {
+  outline: var(--space-1) solid var(--heeler);
+  outline-offset: var(--space-1);
+}
+
+.color-option[aria-pressed="true"]:focus-visible {
+  outline-offset: var(--space-2);   /* clears the selection ring */
+}
+
+/* Squares are plain divs today and take no focus, so this never matches yet.
+   It is here so the floor holds the moment the render layer makes them
+   focusable -- the cue has to be inside, because the board clips its overflow. */
+.square:focus-visible {
+  outline: var(--space-1) solid var(--heeler);
+  outline-offset: calc(-1 * var(--space-1));
+  z-index: 3;
+}
+
+/* --------------------------------------------------------------------------
+   Status line -- off the board, quiet, never an alarm.
+
+   One calm treatment for every message this element can hold, the check
+   message included. Styling check differently would need a class hook from
+   the render layer, which is not this file's to add.
+   -------------------------------------------------------------------------- */
+
+.status-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: var(--space-3) var(--space-6);
+  /* Held at two lines' height so the board does not jump under a child's
+     finger when the message changes length. 34ch keeps the longest message
+     ("It's a tie -- fifty turns went by with nothing taken.") to two lines. */
+  min-height: calc(var(--touch-min) + var(--space-4));   /* 80px */
+  max-width: min(100%, 34ch);
+  font-size: var(--text-md);
+  font-weight: 500;
+  line-height: var(--lh-normal);
+  color: var(--ink);            /* ink on sky: 7.3:1 */
+  background: var(--sky);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* --------------------------------------------------------------------------
+   Buttons under the board.
+   -------------------------------------------------------------------------- */
+
+.game-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);          /* 24px: twice the 12px floor, per §6 */
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Board
+   -------------------------------------------------------------------------- */
+
+.board {
+  /* Squares stay at --square-max until the viewport cannot hold that many of
+     them, then they shrink to fit. --space-12 is the horizontal reservation:
+     page padding, the board border, and slack for a scrollbar. The track
+     count comes from --board-size; no number is written here. */
+  --square: min(
+    var(--square-max),
+    calc((100vw - var(--space-12)) / var(--board-size))
+  );
+
+  display: grid;
+  grid-template-columns: repeat(var(--board-size), var(--square));
+  grid-template-rows: repeat(var(--board-size), var(--square));
+  border: var(--space-1) solid var(--ink);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.square {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+
+  /* Declared transparent so a state change animates rather than snaps. */
+  outline: var(--space-1) solid transparent;
+  outline-offset: calc(-1 * var(--space-1));
+  box-shadow: inset 0 0 0 var(--space-2) transparent;
+  transition:
+    outline-color var(--t-selection) var(--ease),
+    box-shadow var(--t-selection) var(--ease);
+}
+
+.square.light {
+  background: var(--board-light);
+}
+
+.square.dark {
+  background: var(--board-dark);
+}
+
+/* Selection. Heeler is the identity colour; the ink band immediately inside
+   gives it a hard edge on a dark square, where heeler alone is only 2.1:1. */
+.square.selected {
+  outline-color: var(--heeler);
+  box-shadow: inset 0 0 0 var(--space-2) var(--ink);
+  z-index: 2;
+}
+
+/* --------------------------------------------------------------------------
+   Last move -- the two squares the previous move went from and to.
+
+   A record, not an instruction, so it is drawn in the square itself rather
+   than on top of it: the fill shifts towards heeler and a hairline of ink runs
+   round the edge. It cannot be confused with the mango dot and mango ring,
+   which are centred shapes in a different hue, nor with the selection, which
+   is a heeler outline over an 8px ink band. Heeler rather than mint because
+   mint is the success colour and a record of the bot taking a piece is not
+   praise; heeler is the neutral "where things are" colour. The ink hairline
+   is what makes it legible: 9.3:1 on the light
+   square, 4.6:1 on the dark one. The tint sits under the piece, and the piece
+   keeps its own ink or board-light stroke, so nothing gets harder to read.
+   -------------------------------------------------------------------------- */
+
+.square.light.last-move {
+  background: var(--sky);
+  background: color-mix(in srgb, var(--heeler) 30%, var(--board-light));
+}
+
+.square.dark.last-move {
+  background: var(--sky);
+  background: color-mix(in srgb, var(--heeler) 35%, var(--board-dark));
+}
+
+.square.last-move::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: calc(var(--space-1) / 2) solid var(--ink);
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   While the opponent is choosing.
+
+   The status line already says so in words, so the board says it in one
+   silent way only: the pointer stops being a pointer, because a tap here does
+   nothing until the reply lands. No spinner, no dimming, no pulse, nothing
+   that reads as a clock -- the child is never being hurried.
+   -------------------------------------------------------------------------- */
+
+.board.bot-thinking .square {
+  cursor: default;
+}
+
+/* --------------------------------------------------------------------------
+   Legal-move affordance.
+
+   The most important thing on the screen, so it is not subtle. Mango carries
+   the meaning; an ink edge carries the contrast, because no accent token
+   clears 3:1 against boardLight and boardDark both (mango: 1.59 / 1.26).
+   Ink does: 9.28 on boardLight, 4.64 on boardDark. Mango on ink is 5.83.
+   -------------------------------------------------------------------------- */
+
+.square.highlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;                 /* centres without needing a transform */
+  width: 38%;
+  height: 38%;
+  border-radius: 50%;
+  background: var(--mango);
+  box-shadow: 0 0 0 calc(var(--space-1) / 2) var(--ink);
+  animation: affordance-in var(--t-piece) var(--ease) both;
+}
+
+/* Capturable piece: a ring around the square instead, so the destination is
+   still readable with a piece sitting on it. */
+.square.highlight.occupied::after {
+  width: 88%;
+  height: 88%;
+  background: transparent;
+  border: var(--space-1) solid var(--mango);
+  box-shadow:
+    0 0 0 calc(var(--space-1) / 2) var(--ink),
+    inset 0 0 0 calc(var(--space-1) / 2) var(--ink);
+}
+
+@keyframes affordance-in {
+  from { transform: scale(0.5); }
+  to   { transform: scale(1); }
+}
+
+/* --------------------------------------------------------------------------
+   Pieces
+
+   Traditional Staunton silhouettes, flat: no gradient, no bevel, no shadow.
+   The Unicode glyph stays in the DOM for assistive tech and is made invisible
+   rather than removed; the artwork is a background image on the same element.
+   -------------------------------------------------------------------------- */
+
+.piece {
+  width: calc(var(--square) * 0.86);
+  height: calc(var(--square) * 0.86);
+  color: transparent;
+  line-height: 1;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 1;
+  transition: transform var(--t-piece) var(--ease);
+}
+
+.piece.white.king {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%23F6EDDD%22%20stroke%3D%22%232E3A44%22%20stroke-width%3D%221.8%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M%2021%203.5%20H%2024%20V%206.5%20H%2027%20V%209.5%20H%2024%20V%2012.5%20H%2021%20V%209.5%20H%2018%20V%206.5%20H%2021%20Z%22%2F%3E%3Cpath%20d%3D%22M%2022.5%2012.5%20C%2017%2012.5%2014%2016%2014%2019.5%20C%2014%2022.5%2016%2024%2017%2025.5%20H%2028%20C%2029%2024%2031%2022.5%2031%2019.5%20C%2031%2016%2028%2012.5%2022.5%2012.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2015.5%2025.5%20H%2029.5%20V%2028.5%20H%2015.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2016%2028.5%20C%2015%2031%2013.5%2032%2012.5%2033%20H%2032.5%20C%2031.5%2032%2030%2031%2029%2028.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.white.queen {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%23F6EDDD%22%20stroke%3D%22%232E3A44%22%20stroke-width%3D%221.8%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Ccircle%20cx%3D%229.5%22%20cy%3D%2210.5%22%20r%3D%222.2%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%227.5%22%20r%3D%222.2%22%2F%3E%3Ccircle%20cx%3D%2222.5%22%20cy%3D%226.5%22%20r%3D%222.4%22%2F%3E%3Ccircle%20cx%3D%2229%22%20cy%3D%227.5%22%20r%3D%222.2%22%2F%3E%3Ccircle%20cx%3D%2235.5%22%20cy%3D%2210.5%22%20r%3D%222.2%22%2F%3E%3Cpath%20d%3D%22M%2010%2012.5%20L%2013.5%2024%20H%2031.5%20L%2035%2012.5%20L%2029.5%2019.5%20L%2028.5%2010%20L%2024%2019.5%20L%2022.5%209%20L%2021%2019.5%20L%2016.5%2010%20L%2015.5%2019.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2012.5%2024%20H%2032.5%20V%2027%20H%2012.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2013.5%2027%20C%2013%2030%2012%2031.5%2011%2033%20H%2034%20C%2033%2031.5%2032%2030%2031.5%2027%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.white.rook {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%23F6EDDD%22%20stroke%3D%22%232E3A44%22%20stroke-width%3D%221.8%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M%2010%2012%20V%207%20H%2015%20V%2010%20H%2019.5%20V%207%20H%2025.5%20V%2010%20H%2030%20V%207%20H%2035%20V%2012%20Z%22%2F%3E%3Cpath%20d%3D%22M%2011.5%2012%20H%2033.5%20V%2015%20H%2011.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2014%2015%20L%2012.5%2030%20H%2032.5%20L%2031%2015%20Z%22%2F%3E%3Cpath%20d%3D%22M%2011.5%2030%20H%2033.5%20V%2033%20H%2011.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.white.bishop {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%23F6EDDD%22%20stroke%3D%22%232E3A44%22%20stroke-width%3D%221.8%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Ccircle%20cx%3D%2222.5%22%20cy%3D%225.5%22%20r%3D%222.2%22%2F%3E%3Cpath%20d%3D%22M%2022.5%207.7%20C%2017%2010.5%2014.5%2015%2015%2019%20C%2015.3%2021.5%2017%2023%2018%2024.5%20H%2027%20C%2028%2023%2029.7%2021.5%2030%2019%20C%2030.5%2015%2028%2010.5%2022.5%207.7%20Z%22%2F%3E%3Cpath%20d%3D%22M%2020.5%2012%20L%2026.5%2018.5%22%20fill%3D%22none%22%20stroke%3D%22%232E3A44%22%2F%3E%3Cpath%20d%3D%22M%2016%2024.5%20H%2029%20V%2027.5%20H%2016%20Z%22%2F%3E%3Cpath%20d%3D%22M%2016.5%2027.5%20C%2016%2030%2014%2031.5%2012.5%2033%20H%2032.5%20C%2031%2031.5%2029%2030%2028.5%2027.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.white.knight {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%23F6EDDD%22%20stroke%3D%22%232E3A44%22%20stroke-width%3D%221.8%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M%2022.5%208%20C%2026%208%2027.6%209.8%2027.5%2012%20C%2032.5%2014.5%2035%2020.5%2034.5%2033%20L%2014.5%2033%20C%2014.5%2027.5%2021%2027.5%2022.2%2021.5%20C%2020.2%2024.5%2016.5%2026.5%2013.2%2027.8%20C%2011.8%2028.4%2011%2029.6%209.6%2029.6%20C%208.9%2028.2%2010%2026.6%2010.6%2025.6%20C%2012%2021.5%2015%2017.5%2018%2014%20C%2017.4%2012.4%2017.4%2010.4%2018.4%209.4%20C%2019.4%209.9%2019.9%2010.9%2020.4%2011.6%20C%2020.9%209.6%2021.4%208%2022.5%208%20Z%22%2F%3E%3Cpath%20d%3D%22M%2026%2011.5%20C%2030%2014.5%2032%2020%2032.3%2026%22%20fill%3D%22none%22%20stroke%3D%22%232E3A44%22%2F%3E%3Ccircle%20cx%3D%2217.8%22%20cy%3D%2216.2%22%20r%3D%221.15%22%20fill%3D%22%232E3A44%22%20stroke%3D%22none%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.white.pawn {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%23F6EDDD%22%20stroke%3D%22%232E3A44%22%20stroke-width%3D%221.8%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Ccircle%20cx%3D%2222.5%22%20cy%3D%2211.5%22%20r%3D%225%22%2F%3E%3Cpath%20d%3D%22M%2018%2017%20H%2027%20V%2019.5%20H%2018%20Z%22%2F%3E%3Cpath%20d%3D%22M%2019%2019.5%20C%2017.5%2024%2014%2028%2013.5%2033%20H%2031.5%20C%2031%2028%2027.5%2024%2026%2019.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.black.king {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%232E3A44%22%20stroke%3D%22%23F3E4C8%22%20stroke-width%3D%221.2%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M%2021%203.5%20H%2024%20V%206.5%20H%2027%20V%209.5%20H%2024%20V%2012.5%20H%2021%20V%209.5%20H%2018%20V%206.5%20H%2021%20Z%22%2F%3E%3Cpath%20d%3D%22M%2022.5%2012.5%20C%2017%2012.5%2014%2016%2014%2019.5%20C%2014%2022.5%2016%2024%2017%2025.5%20H%2028%20C%2029%2024%2031%2022.5%2031%2019.5%20C%2031%2016%2028%2012.5%2022.5%2012.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2015.5%2025.5%20H%2029.5%20V%2028.5%20H%2015.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2016%2028.5%20C%2015%2031%2013.5%2032%2012.5%2033%20H%2032.5%20C%2031.5%2032%2030%2031%2029%2028.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.black.queen {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%232E3A44%22%20stroke%3D%22%23F3E4C8%22%20stroke-width%3D%221.2%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Ccircle%20cx%3D%229.5%22%20cy%3D%2210.5%22%20r%3D%222.2%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%227.5%22%20r%3D%222.2%22%2F%3E%3Ccircle%20cx%3D%2222.5%22%20cy%3D%226.5%22%20r%3D%222.4%22%2F%3E%3Ccircle%20cx%3D%2229%22%20cy%3D%227.5%22%20r%3D%222.2%22%2F%3E%3Ccircle%20cx%3D%2235.5%22%20cy%3D%2210.5%22%20r%3D%222.2%22%2F%3E%3Cpath%20d%3D%22M%2010%2012.5%20L%2013.5%2024%20H%2031.5%20L%2035%2012.5%20L%2029.5%2019.5%20L%2028.5%2010%20L%2024%2019.5%20L%2022.5%209%20L%2021%2019.5%20L%2016.5%2010%20L%2015.5%2019.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2012.5%2024%20H%2032.5%20V%2027%20H%2012.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2013.5%2027%20C%2013%2030%2012%2031.5%2011%2033%20H%2034%20C%2033%2031.5%2032%2030%2031.5%2027%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.black.rook {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%232E3A44%22%20stroke%3D%22%23F3E4C8%22%20stroke-width%3D%221.2%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M%2010%2012%20V%207%20H%2015%20V%2010%20H%2019.5%20V%207%20H%2025.5%20V%2010%20H%2030%20V%207%20H%2035%20V%2012%20Z%22%2F%3E%3Cpath%20d%3D%22M%2011.5%2012%20H%2033.5%20V%2015%20H%2011.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2014%2015%20L%2012.5%2030%20H%2032.5%20L%2031%2015%20Z%22%2F%3E%3Cpath%20d%3D%22M%2011.5%2030%20H%2033.5%20V%2033%20H%2011.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.black.bishop {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%232E3A44%22%20stroke%3D%22%23F3E4C8%22%20stroke-width%3D%221.2%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Ccircle%20cx%3D%2222.5%22%20cy%3D%225.5%22%20r%3D%222.2%22%2F%3E%3Cpath%20d%3D%22M%2022.5%207.7%20C%2017%2010.5%2014.5%2015%2015%2019%20C%2015.3%2021.5%2017%2023%2018%2024.5%20H%2027%20C%2028%2023%2029.7%2021.5%2030%2019%20C%2030.5%2015%2028%2010.5%2022.5%207.7%20Z%22%2F%3E%3Cpath%20d%3D%22M%2020.5%2012%20L%2026.5%2018.5%22%20fill%3D%22none%22%20stroke%3D%22%23F3E4C8%22%2F%3E%3Cpath%20d%3D%22M%2016%2024.5%20H%2029%20V%2027.5%20H%2016%20Z%22%2F%3E%3Cpath%20d%3D%22M%2016.5%2027.5%20C%2016%2030%2014%2031.5%2012.5%2033%20H%2032.5%20C%2031%2031.5%2029%2030%2028.5%2027.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.black.knight {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%232E3A44%22%20stroke%3D%22%23F3E4C8%22%20stroke-width%3D%221.2%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M%2022.5%208%20C%2026%208%2027.6%209.8%2027.5%2012%20C%2032.5%2014.5%2035%2020.5%2034.5%2033%20L%2014.5%2033%20C%2014.5%2027.5%2021%2027.5%2022.2%2021.5%20C%2020.2%2024.5%2016.5%2026.5%2013.2%2027.8%20C%2011.8%2028.4%2011%2029.6%209.6%2029.6%20C%208.9%2028.2%2010%2026.6%2010.6%2025.6%20C%2012%2021.5%2015%2017.5%2018%2014%20C%2017.4%2012.4%2017.4%2010.4%2018.4%209.4%20C%2019.4%209.9%2019.9%2010.9%2020.4%2011.6%20C%2020.9%209.6%2021.4%208%2022.5%208%20Z%22%2F%3E%3Cpath%20d%3D%22M%2026%2011.5%20C%2030%2014.5%2032%2020%2032.3%2026%22%20fill%3D%22none%22%20stroke%3D%22%23F3E4C8%22%2F%3E%3Ccircle%20cx%3D%2217.8%22%20cy%3D%2216.2%22%20r%3D%221.15%22%20fill%3D%22%23F3E4C8%22%20stroke%3D%22none%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+.piece.black.pawn {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2045%2045%22%20fill%3D%22%232E3A44%22%20stroke%3D%22%23F3E4C8%22%20stroke-width%3D%221.2%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%3E%3Ccircle%20cx%3D%2222.5%22%20cy%3D%2211.5%22%20r%3D%225%22%2F%3E%3Cpath%20d%3D%22M%2018%2017%20H%2027%20V%2019.5%20H%2018%20Z%22%2F%3E%3Cpath%20d%3D%22M%2019%2019.5%20C%2017.5%2024%2014%2028%2013.5%2033%20H%2031.5%20C%2031%2028%2027.5%2024%2026%2019.5%20Z%22%2F%3E%3Cpath%20d%3D%22M%2010.5%2033%20H%2034.5%20A%202%202%200%200%201%2036.5%2035%20V%2038.5%20H%208.5%20V%2035%20A%202%202%200%200%201%2010.5%2033%20Z%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* --------------------------------------------------------------------------
+   Promotion sheet.
+
+   Four pieces to choose between, each one shown as the artwork the child has
+   been looking at all game, at 64px -- the touch floor -- so the picture is
+   the target and the word underneath only confirms it. Sits above the board:
+   z-index 4 clears the 3 on a focused square, which is the highest this file
+   goes.
+   -------------------------------------------------------------------------- */
+
+.promotion-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.promotion-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  background: color-mix(in srgb, var(--ink) 60%, transparent);
+}
+
+.promotion-panel {
+  position: relative;           /* above the backdrop, same stacking context */
+  /* Auto margins, not place-items:center -- if the sheet is ever taller than
+     a short landscape phone it scrolls from the top instead of being clipped. */
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  width: min(100%, calc(var(--touch-min) * 8));   /* 512px */
+  padding: var(--space-6) var(--space-4);
+  background: var(--sand);
+  border: var(--space-1) solid var(--ink);
+  border-radius: var(--radius-lg);
+  /* Answers the tap that opened it, and stops. Not an entrance effect: no
+     other element in this file animates on arrival. */
+  animation: sheet-in var(--t-selection) var(--ease) both;
+}
+
+@keyframes sheet-in {
+  from { transform: scale(0.96); }
+  to   { transform: scale(1); }
+}
+
+.promotion-prompt {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  text-align: center;
+  text-wrap: balance;
+  color: var(--ink);            /* ink on sand: 9.4:1 */
+}
+
+/* Two by two on a phone, one row of four once there is room for it. */
+.promotion-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);          /* 24px: twice the 12px floor, per §6 */
+  width: 100%;
+}
+
+@media (min-width: 34rem) {
+  .promotion-choices {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Each option is a square of the board, and it takes the square colour its
+   own piece reads against: black pieces (ink fill, board-light stroke) on the
+   light square, white pieces (sand fill, ink stroke) on the dark one. The
+   silhouette is what the child is picking, so nothing is allowed to sit it on
+   a near-identical fill. board-light is the base, so a browser without :has()
+   still gets the correct tile for a black promotion and the board's own light
+   square for a white one. Label contrast: ink on board-light 9.2:1, ink on
+   board-dark 4.6:1 -- both AA for normal text. */
+.promotion-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
+  background: var(--board-light);
+}
+
+.promotion-option:has(.piece.white) {
+  background: var(--board-dark);
+}
+
+/* Hover adds a ring rather than swapping the fill, so pointing at an option
+   never costs the piece its contrast. Same ring the setup screen uses. */
+@media (hover: hover) {
+  .promotion-option:hover {
+    box-shadow: 0 0 0 var(--space-1) var(--heeler);
+  }
+}
+
+/* .piece normally sizes itself from --square, which only exists on the board.
+   Here the size is stated outright, from the touch token, so no inline style
+   is needed to make the artwork appear. */
+.promotion-option .piece {
+  width: var(--touch-min);
+  height: var(--touch-min);
+}
+
+.promotion-name {
+  font-size: var(--text-sm);    /* the 1rem floor, ink on board-light: 9.2:1 */
+  font-weight: 500;
+  line-height: var(--lh-tight);
+}
+
+/* --------------------------------------------------------------------------
+   Roomier viewports.
+
+   The board is the product, so where both axes have room it grows past the
+   64px square floor to 96px -- one and a half touch targets. The reservations
+   are what the rest of the screen needs: page padding and the board's own edge
+   across, and down the 240px of status line (80), button row (64), three gaps
+   and page padding. That is what keeps a tablet in landscape -- 1024x768, the
+   tightest case in §3's "tablet and desktop, equally" -- from scrolling.
+   max() keeps it from ever coming out below the floor.
+   -------------------------------------------------------------------------- */
+
+@media (min-width: 48rem) {
+  .board {
+    --square: max(
+      var(--square-max),
+      min(
+        calc(var(--touch-min) * 1.5),
+        calc((100vw - var(--space-16) * 2) / var(--board-size)),
+        calc(
+          (100vh - (var(--space-16) * 3 + var(--space-12))) / var(--board-size)
+        )
+      )
+    );
+  }
+}
+
+/* Narrow phones: the wide pill would otherwise push the button row to wrap
+   sooner than it needs to. */
+@media (max-width: 26rem) {
+  .play-button {
+    padding-inline: var(--space-8);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion. Everything becomes instant; nothing disappears. The dot,
+   the ring, the selection band and the focus ring all still arrive, just
+   without travel.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .color-option:active,
+  .play-button:active,
+  .new-game-button:active,
+  .promotion-cancel:active {
+    transform: none;
+  }
+
+  /* The sheet still arrives, it just arrives already the right size. */
+  .promotion-panel {
+    animation: none;
+  }
+}

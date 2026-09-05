@@ -421,3 +421,53 @@ committing.** Fixed by adding that line to the task.
 
 **`hello.ts`, `moves.js`, and the four-document command references** are
 unchanged by this entry; see the entry above.
+## 4 Sep 2026 — the 8×8 path moves to chess.js
+
+**Decision: adopt chess.js (v1.4.0, BSD-2-Clause) for full games.** The
+variable-board engine was never going to grow castling, en passant and
+promotion cheaply, and a playable game needs all three plus draws. chess.js
+has had them right for years. It becomes the rules engine for the 8×8 game;
+`moves.ts` and `game.ts` are **superseded on the 8×8 path only** and retained,
+unchanged, for the variable-size lesson boards where chess.js cannot go.
+Nothing was deleted.
+
+**The wrapper is the boundary.** `standard-game.ts` is the only file that
+imports chess.js. It exposes the project's own vocabulary — `Square`,
+`Color`, `Piece`, `Board`, `Move` from `moves.ts`, plus `StandardMove`,
+`StandardGame`, `MoveResult`, `StandardGameStatus` — and nothing from
+chess.js leaks through an exported type or value. The renderer and the bots
+call the wrapper; if `new Chess(` ever appears in `board.html`, something
+has gone wrong. The wrapper is pure: `applyMove` returns a new game and the
+input is never mutated. A game is a FEN plus the long-algebraic move history;
+every question except repetition is answered from the FEN, and repetition
+replays the history so chess.js owns that rule too.
+
+**Contract change proposed, not made.** `contracts/game-state.md` describes
+the variable-board game layer and says nothing about a second path. The
+amendment is drafted in `proposals/game-state-standard-game.md` for the
+project lead to review. `contracts/` was not edited.
+
+**Bots.** `bots.ts` has three levels over the wrapper: `random`, `greedy`
+(highest-value capture, else random) and `thinking` (minimax to depth 2 on
+material: pawn 1, knight and bishop 3, rook 5, queen 9). `chooseMove(game,
+level)` is pure and takes an injectable random source so tests are
+deterministic. Tests cover legality at every level, greedy taking a hanging
+queen, and thinking declining a one-move blunder.
+
+**Screens.** `board.html` gained a setup screen (colour, opponent, Play) and a
+promotion prompt; the bot replies automatically after the player's move. The
+three opponents are named for children rather than easy/medium/hard.
+
+**Browser loading.** `tsc` emits `import { Chess } from "chess.js"` verbatim
+and a browser cannot resolve a bare specifier, so `board.html` carries an
+import map pointing `chess.js` at `vendor/chess.js`, which `npm run build`
+copies out of `node_modules`. The vendored bundle is gitignored and keeps its
+licence header. The deploy workflow copies `vendor/` and `styles.css` and the
+new compiled modules into `dist/`.
+
+**`design-brief.md` was briefly a copy of the visual-design agent file.**
+When this work started the brief in the tree was byte-identical to
+`.claude/agents/visual-design.md`, with no numbered sections. The real brief
+(ten sections) arrived from the parallel design session partway through; the
+styling pass was re-checked against it, in particular §7 voice (no
+exclamation marks outside genuine celebration) and §8 anti-patterns.
